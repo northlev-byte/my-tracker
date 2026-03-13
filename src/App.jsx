@@ -628,7 +628,8 @@ function HolidaysTab({ fy }) {
 function ProspectsTab({ prospects, setProspects, owners }) {
   const [addingFor, setAddingFor] = useState(null);
   const [form, setForm] = useState({ type: "Client", name: "", notes: "" });
-  const [editingId, setEditingId] = useState(null);
+  const [selectedProspect, setSelectedProspect] = useState(null); // detail modal
+  const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState({});
 
   const individualOwners = (owners || DEFAULT_OWNERS).filter(o => !/[/&]/.test(o));
@@ -651,17 +652,41 @@ function ProspectsTab({ prospects, setProspects, owners }) {
     setAddingFor(null);
   }
 
-  function deleteProspect(id) { setProspects(p => p.filter(x => x.id !== id)); }
-  function startEdit(p) { setEditingId(p.id); setEditDraft({ name: p.name, notes: p.notes || "" }); }
-  function saveEdit(id) {
-    setProspects(p => p.map(x => x.id === id ? { ...x, ...editDraft } : x));
-    setEditingId(null);
+  function openDetail(p) {
+    setSelectedProspect(p);
+    setEditing(false);
   }
+
+  function closeDetail() {
+    setSelectedProspect(null);
+    setEditing(false);
+  }
+
+  function startEdit() {
+    setEditDraft({ type: selectedProspect.type, name: selectedProspect.name, notes: selectedProspect.notes || "" });
+    setEditing(true);
+  }
+
+  function saveEdit() {
+    if (!editDraft.name.trim()) return;
+    const updated = { ...selectedProspect, ...editDraft };
+    setProspects(p => p.map(x => x.id === selectedProspect.id ? updated : x));
+    setSelectedProspect(updated);
+    setEditing(false);
+  }
+
+  function deleteProspect(id) {
+    setProspects(p => p.filter(x => x.id !== id));
+    closeDetail();
+  }
+
+  // Keep selectedProspect in sync if prospects array changes
+  const liveSelected = selectedProspect ? (prospects || []).find(p => p.id === selectedProspect.id) || null : null;
 
   return (
     <div>
       <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 18 }}>
-        Track potential clients and venues each team member is in conversation with.
+        Track potential clients and venues each team member is in conversation with. Click any entry to view details.
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 16 }}>
         {individualOwners.map(owner => {
@@ -683,34 +708,20 @@ function ProspectsTab({ prospects, setProspects, owners }) {
                 </div>
               </div>
 
-              {/* Prospect list */}
+              {/* Prospect list — each row is clickable */}
               {ownerProspects.map((p, i) => (
-                <div key={p.id} style={{ padding: "8px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.06)" : "none" }}>
-                  {editingId === p.id ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <input className="form-input" value={editDraft.name} onChange={e => setEditDraft(d => ({ ...d, name: e.target.value }))}
-                        style={{ fontSize: 13, padding: "5px 8px" }} placeholder="Name" />
-                      <textarea className="form-input" value={editDraft.notes} onChange={e => setEditDraft(d => ({ ...d, notes: e.target.value }))}
-                        rows={2} style={{ fontSize: 12, padding: "5px 8px", resize: "vertical" }} placeholder="Notes (optional)" />
-                      <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
-                        <button onClick={() => saveEdit(p.id)} style={{ background: pc.dot, color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Save</button>
-                        <button onClick={() => setEditingId(null)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-                      </div>
+                <div key={p.id} onClick={() => openDetail(p)}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", marginLeft: -10, marginRight: -10, borderRadius: 8, cursor: "pointer", transition: "background .12s", borderTop: i > 0 ? `1px solid rgba(0,0,0,.05)` : "none" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,.7)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <span style={{ fontSize: 15, flexShrink: 0 }}>{p.type === "Venue" ? "📍" : "👤"}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: pc.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                    <div style={{ fontSize: 11, color: pc.text, opacity: .5, marginTop: 1 }}>
+                      {p.notes ? p.notes.substring(0, 40) + (p.notes.length > 40 ? "…" : "") : p.type + " · " + p.createdAt}
                     </div>
-                  ) : (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                      <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>{p.type === "Venue" ? "📍" : "👤"}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: pc.text }}>{p.name}</div>
-                        {p.notes && <div style={{ fontSize: 11, color: pc.text, opacity: .65, marginTop: 2 }}>{p.notes}</div>}
-                        <div style={{ fontSize: 10, color: pc.text, opacity: .4, marginTop: 3 }}>{p.type} · added {p.createdAt}</div>
-                      </div>
-                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                        <button onClick={() => startEdit(p)} style={{ background: "rgba(0,0,0,.06)", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 11, cursor: "pointer", color: pc.text, fontFamily: "inherit" }}>✏️</button>
-                        <button onClick={() => deleteProspect(p.id)} style={{ background: "rgba(239,68,68,.1)", border: "none", borderRadius: 5, padding: "3px 7px", fontSize: 11, cursor: "pointer", color: "#ef4444", fontFamily: "inherit" }}>✕</button>
-                      </div>
-                    </div>
-                  )}
+                  </div>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={pc.dot} strokeWidth="2.5" style={{ flexShrink: 0, opacity: .4 }}><path d="m9 18 6-6-6-6"/></svg>
                 </div>
               ))}
 
@@ -752,6 +763,95 @@ function ProspectsTab({ prospects, setProspects, owners }) {
           );
         })}
       </div>
+
+      {/* Detail modal */}
+      {liveSelected && (() => {
+        const p = liveSelected;
+        const pc = PERSON_COLORS[p.assignee] || { bg: "#f9fafb", border: "#e5e7eb", text: "#374151", dot: "#6b7280" };
+        return (
+          <div className="overlay" onClick={e => e.target === e.currentTarget && closeDetail()}>
+            <div className="modal" style={{ width: 480 }}>
+              {/* Modal header */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: `${pc.dot}20`, border: `1.5px solid ${pc.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
+                    {p.type === "Venue" ? "📍" : "👤"}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: pc.dot, textTransform: "uppercase", letterSpacing: ".07em" }}>{p.type}</div>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: "#111827", marginTop: 1 }}>{p.name}</div>
+                  </div>
+                </div>
+                <button onClick={closeDetail} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9ca3af", lineHeight: 1 }}>×</button>
+              </div>
+
+              {/* Owner + date */}
+              <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, background: `${pc.dot}15`, borderRadius: 7, padding: "5px 10px" }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: pc.dot }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: pc.text }}>{p.assignee}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, background: "#f3f4f6", borderRadius: 7, padding: "5px 10px" }}>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>Added {p.createdAt}</span>
+                </div>
+              </div>
+
+              {/* Notes section */}
+              {editing ? (
+                <div>
+                  <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                    {["Client", "Venue"].map(t => (
+                      <button key={t} onClick={() => setEditDraft(d => ({ ...d, type: t }))}
+                        style={{ flex: 1, padding: "6px", border: `1.5px solid ${editDraft.type === t ? pc.dot : "#e5e7eb"}`, borderRadius: 7, background: editDraft.type === t ? `${pc.dot}20` : "#f9fafb", color: editDraft.type === t ? pc.text : "#6b7280", fontWeight: editDraft.type === t ? 700 : 500, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                        {t === "Client" ? "👤 Client" : "📍 Venue"}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="form-label">Name</label>
+                  <input className="form-input" value={editDraft.name} onChange={e => setEditDraft(d => ({ ...d, name: e.target.value }))}
+                    style={{ marginBottom: 10 }} autoFocus />
+                  <label className="form-label">Notes</label>
+                  <textarea className="form-input" value={editDraft.notes} onChange={e => setEditDraft(d => ({ ...d, notes: e.target.value }))}
+                    rows={4} style={{ resize: "vertical" }} placeholder="Add notes…" />
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 8 }}>Notes</div>
+                  {p.notes ? (
+                    <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.6, background: "#f9fafb", borderRadius: 8, padding: "12px 14px", border: "1px solid #f3f4f6", whiteSpace: "pre-wrap" }}>{p.notes}</div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: "#d1d5db", fontStyle: "italic", padding: "12px 0" }}>No notes added yet.</div>
+                  )}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 8, marginTop: 22, alignItems: "center" }}>
+                <button onClick={() => deleteProspect(p.id)}
+                  style={{ background: "transparent", border: "none", color: "#ef4444", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "8px 4px", fontFamily: "inherit" }}>
+                  Delete
+                </button>
+                <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                  {editing ? (
+                    <>
+                      <button className="btn-ghost" onClick={() => setEditing(false)}>Cancel</button>
+                      <button className="btn-primary" onClick={saveEdit}>Save Changes</button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="btn-ghost" onClick={closeDetail}>Close</button>
+                      <button className="btn-primary" onClick={startEdit}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        Edit
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
