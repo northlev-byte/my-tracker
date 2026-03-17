@@ -359,7 +359,7 @@ const PERSON_COLORS = {
 };
 
 // ── Calendar View ─────────────────────────────────────────
-function CalendarView({ leads, onEventClick, holidays=[] }) {
+function CalendarView({ leads, onEventClick, holidays=[], recontacts=[] }) {
   const today = new Date();
   const [calYear, setCalYear] = useState(today.getFullYear());
   const [calMonth, setCalMonth] = useState(today.getMonth()); // 0-indexed
@@ -392,6 +392,19 @@ function CalendarView({ leads, onEventClick, holidays=[] }) {
       const key = d.getDate();
       if (!eventsByDate[key]) eventsByDate[key] = [];
       eventsByDate[key].push(lead);
+    }
+  });
+
+  // Map recontact reminders to their date
+  const recontactsByDate = {};
+  recontacts.forEach(lead => {
+    if (!lead.recontactDate) return;
+    const d = new Date(lead.recontactDate);
+    if (isNaN(d)) return;
+    if (d.getFullYear()===calYear && d.getMonth()===calMonth) {
+      const key = d.getDate();
+      if (!recontactsByDate[key]) recontactsByDate[key] = [];
+      recontactsByDate[key].push(lead);
     }
   });
 
@@ -462,8 +475,9 @@ function CalendarView({ leads, onEventClick, holidays=[] }) {
           const dayNum = date ? date.getDate() : null;
           const isToday = date && date.toDateString()===todayStr;
           const isWeekend = date && (date.getDay()===0||date.getDay()===6);
-          const events = dayNum ? (eventsByDate[dayNum]||[]) : [];
-          const hols   = dayNum ? (holidaysByDate[dayNum]||[]) : [];
+          const events     = dayNum ? (eventsByDate[dayNum]||[])    : [];
+          const hols       = dayNum ? (holidaysByDate[dayNum]||[])   : [];
+          const recs       = dayNum ? (recontactsByDate[dayNum]||[]) : [];
           const MAX_SHOW = 3;
 
           return (
@@ -517,6 +531,14 @@ function CalendarView({ leads, onEventClick, holidays=[] }) {
                       ))}
                     </div>
                   )}
+                  {recs.map(lead=>(
+                    <div key={`rc-${lead.id}`}
+                      title={`📞 Recontact: ${lead.client} – ${lead.event}\nOriginally lost: ${lead.date||"unknown date"}`}
+                      style={{background:"#fffbeb",borderLeft:"3px solid #f59e0b",borderRadius:"0 4px 4px 0",padding:"2px 5px",marginTop:2,cursor:"default"}}>
+                      <div style={{fontSize:9,fontWeight:700,color:"#92400e",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📞 {lead.client}</div>
+                      <div style={{fontSize:8,color:"#b45309",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{lead.event}</div>
+                    </div>
+                  ))}
                 </>
               )}
             </div>
@@ -1580,8 +1602,8 @@ function EventTracker() {
               <table style={{width:"100%",borderCollapse:"collapse",minWidth:900}}>
                 <thead>
                   <tr style={{borderBottom:"1.5px solid #fee2e2",background:"#fff5f5"}}>
-                    {["Ref","Class","Client","Event","Date","Venue","Owner","Value","Notes"].map(h=>(
-                      <th key={h} className="th" style={{color:"#ef4444"}}>{h}</th>
+                    {["Ref","Class","Client","Event","Date","Venue","Owner","Value","Notes","Recontact Date"].map(h=>(
+                      <th key={h} className="th" style={{color: h==="Recontact Date"?"#b45309":"#ef4444"}}>{h}</th>
                     ))}
                     <th className="th"></th>
                   </tr>
@@ -1599,6 +1621,12 @@ function EventTracker() {
                       <td style={{padding:"10px 12px",fontSize:13,color:"#6b7280"}}>{lead.assignee}</td>
                       <td style={{padding:"10px 12px",fontSize:13,color:"#6b7280",fontFamily:"'DM Mono',monospace"}}>{lead.value?`£${Number(lead.value).toLocaleString()}`:"—"}</td>
                       <td style={{padding:"10px 12px",fontSize:12,color:"#9ca3af",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.notes||"—"}</td>
+                      <td style={{padding:"8px 10px",minWidth:148}}>
+                        <input type="date" value={lead.recontactDate||""} onChange={e=>updateField(lead.id,"recontactDate",e.target.value)}
+                          style={{fontSize:12,padding:"4px 8px",border:`1.5px solid ${lead.recontactDate?"#fbbf24":"#e5e7eb"}`,borderRadius:6,color:lead.recontactDate?"#92400e":"#9ca3af",fontFamily:"inherit",background:lead.recontactDate?"#fffbeb":"#fff",cursor:"pointer",width:"100%"}}
+                          title="Set a date to be reminded to recontact this client"/>
+                        {lead.recontactDate&&<div style={{fontSize:9,color:"#b45309",marginTop:2,fontWeight:600}}>📞 On calendar</div>}
+                      </td>
                       <td style={{padding:"10px 12px"}}>
                         <button onClick={()=>updateStage(lead.id,"Qualified")} style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:6,padding:"3px 8px",fontSize:11,color:"#15803d",cursor:"pointer",fontWeight:600,fontFamily:"inherit",whiteSpace:"nowrap"}}>↩ Restore</button>
                       </td>
@@ -1843,7 +1871,7 @@ function EventTracker() {
         )}
 
         {/* Calendar */}
-        {view==="calendar"&&<CalendarView leads={filtered} onEventClick={openEdit} holidays={holidaysList} />}
+        {view==="calendar"&&<CalendarView leads={filtered} onEventClick={openEdit} holidays={holidaysList} recontacts={(leads||[]).filter(l=>l.recontactDate)} />}
 
       </>
       }
