@@ -301,7 +301,10 @@ function MonthlyTracker({ leads, fyMonths }) {
                 <div style={{fontSize:11,fontWeight:700,color:hitTarget?"#16a34a":m.isPast&&m.confirmed===0?"rgba(0,0,0,.2)":m.isPast?"#ef4444":m.mc.text,textAlign:"center"}}>
                   {m.confirmed>0?(m.totalPct>100?<span style={{color:"#16a34a"}}>🎉{m.totalPct}%</span>:`${m.totalPct}%`):"—"}
                 </div>
-                {m.total>0&&<div style={{fontSize:9,color:m.mc.text,textAlign:"center",fontFamily:"'DM Mono',monospace",marginTop:1}}>£{m.total>=1000?(m.total/1000).toFixed(0)+"k":m.total}</div>}
+                <div style={{fontSize:8,color:"#6b7280",textAlign:"center",marginTop:1,lineHeight:1.2}}>of £50k target</div>
+                {m.confirmed>0&&<div style={{fontSize:9,fontWeight:700,color:"#16a34a",textAlign:"center",fontFamily:"'DM Mono',monospace",marginTop:3}}>✓ £{m.confirmed>=1000?(m.confirmed/1000).toFixed(0)+"k":m.confirmed}</div>}
+                {m.warm>0&&<div style={{fontSize:9,fontWeight:600,color:"#a855f7",textAlign:"center",fontFamily:"'DM Mono',monospace",marginTop:1}}>~ £{m.warm>=1000?(m.warm/1000).toFixed(0)+"k":m.warm}</div>}
+                {m.cold>0&&<div style={{fontSize:9,fontWeight:600,color:"#06b6d4",textAlign:"center",fontFamily:"'DM Mono',monospace",marginTop:1}}>· £{m.cold>=1000?(m.cold/1000).toFixed(0)+"k":m.cold}</div>}
                 {m.gap>0&&!m.isPast&&m.confirmed>0&&<div style={{fontSize:9,color:"#ef4444",textAlign:"center",marginTop:2,fontWeight:700,whiteSpace:"nowrap"}}>−£{m.gap>=1000?(m.gap/1000).toFixed(0)+"k":m.gap}</div>}
                 <div style={{fontSize:9,color:m.mc.text,textAlign:"center",marginTop:2,opacity:.6}}>{m.eventCount} evt{m.eventCount!==1?"s":""}</div>
               </div>
