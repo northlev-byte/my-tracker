@@ -305,7 +305,7 @@ function MonthlyTracker({ leads, fyMonths }) {
                 {m.confirmed>0&&<div style={{fontSize:9,fontWeight:700,color:"#16a34a",textAlign:"center",fontFamily:"'DM Mono',monospace",marginTop:3}}>✓ £{m.confirmed>=1000?(m.confirmed/1000).toFixed(0)+"k":m.confirmed}</div>}
                 {m.warm>0&&<div style={{fontSize:9,fontWeight:600,color:"#a855f7",textAlign:"center",fontFamily:"'DM Mono',monospace",marginTop:1}}>~ £{m.warm>=1000?(m.warm/1000).toFixed(0)+"k":m.warm}</div>}
                 {m.cold>0&&<div style={{fontSize:9,fontWeight:600,color:"#06b6d4",textAlign:"center",fontFamily:"'DM Mono',monospace",marginTop:1}}>· £{m.cold>=1000?(m.cold/1000).toFixed(0)+"k":m.cold}</div>}
-                {m.gap>0&&!m.isPast&&m.confirmed>0&&<div style={{fontSize:9,color:"#ef4444",textAlign:"center",marginTop:2,fontWeight:700,whiteSpace:"nowrap"}}>−£{m.gap>=1000?(m.gap/1000).toFixed(0)+"k":m.gap}</div>}
+                {m.gap>0&&<div style={{fontSize:9,color:"#ef4444",textAlign:"center",marginTop:2,fontWeight:700,whiteSpace:"nowrap"}}>−£{m.gap>=1000?(m.gap/1000).toFixed(1)+"k":m.gap}</div>}
                 <div style={{fontSize:9,color:m.mc.text,textAlign:"center",marginTop:2,opacity:.6}}>{m.eventCount} evt{m.eventCount!==1?"s":""}</div>
               </div>
             );
@@ -929,6 +929,394 @@ function PasswordScreen({ onUnlock }) {
   );
 }
 
+// ── HubSpot Integration ───────────────────────────────────
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return { headers: [], rows: [] };
+  function splitLine(line) {
+    const res = []; let cur = ""; let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { if (inQ && line[i+1]==='"') { cur+='"'; i++; } else inQ=!inQ; }
+      else if (c === ',' && !inQ) { res.push(cur.trim()); cur=""; }
+      else cur += c;
+    }
+    res.push(cur.trim()); return res;
+  }
+  const headers = splitLine(lines[0]);
+  const rows = lines.slice(1).filter(l=>l.trim()).map(l=>{ const vals=splitLine(l); const obj={}; headers.forEach((h,i)=>{ obj[h]=vals[i]||""; }); return obj; });
+  return { headers, rows };
+}
+
+function autoDetectFields(headers) {
+  const map = {};
+  const h = headers.map(x=>x.toLowerCase());
+  const find = (...terms) => headers[h.findIndex(x=>terms.some(t=>x.includes(t)))] || "";
+  map.client   = find("company","account","organisation","organization");
+  map.event    = find("deal name","dealname","name","title");
+  map.value    = find("amount","value","revenue","deal value");
+  map.date     = find("close date","closedate","event date","date");
+  map.stage    = find("deal stage","stage","status");
+  map.assignee = find("owner","assigned","rep","account manager");
+  map.ref      = find("deal id","id","hs_object","reference","ref");
+  map.notes    = find("description","notes","note");
+  return map;
+}
+
+const DEFAULT_STAGE_MAP = {
+  "closedwon":  "Closed Won",
+  "closed won": "Closed Won",
+  "won":        "Closed Won",
+  "proposal":   "Proposal",
+  "proposaldelivered": "Proposal",
+  "proposal delivered": "Proposal",
+  "presentation": "Proposal",
+  "qualified":  "New",
+  "new":        "New",
+  "appointmentscheduled": "New",
+  "appointment scheduled": "New",
+  "contacted":  "New",
+  "decisionmakerboughtin": "Proposal",
+  "contractsent": "Proposal",
+  "contract sent": "Proposal",
+};
+
+function mapStage(rawStage, customMap) {
+  const key = (rawStage||"").toLowerCase().replace(/\s+/g,"");
+  if (customMap[rawStage]) return customMap[rawStage];
+  const keyFull = (rawStage||"").toLowerCase();
+  for (const [k,v] of Object.entries(DEFAULT_STAGE_MAP)) {
+    if (keyFull.includes(k) || key.includes(k.replace(/\s/g,""))) return v;
+  }
+  return "New";
+}
+
+function fmtVal(v) { return v>0?`£${v.toLocaleString()}`:"—"; }
+
+function HubSpotTab({ leads, setLeads, owners }) {
+  const [section, setSection] = useState("import");
+  const [token, setToken] = useState(() => localStorage.getItem("hs_token")||"");
+  const [tokenSaved, setTokenSaved] = useState(!!localStorage.getItem("hs_token"));
+  const [csvData, setCsvData] = useState(null);
+  const [csvHeaders, setCsvHeaders] = useState([]);
+  const [fieldMap, setFieldMap] = useState({});
+  const [customStageMap, setCustomStageMap] = useState(() => { try { return JSON.parse(localStorage.getItem("hs_stagemap")||"{}"); } catch { return {}; } });
+  const [ownerMap, setOwnerMap] = useState(() => { try { return JSON.parse(localStorage.getItem("hs_ownermap")||"{}"); } catch { return {}; } });
+  const [preview, setPreview] = useState(null);
+  const [importResult, setImportResult] = useState(null);
+  const [stageFilter, setStageFilter] = useState("All");
+  const fileRef = useRef(null);
+
+  const existingRefs = useMemo(() => new Set((leads||[]).map(l=>String(l.ref||"")).filter(Boolean)), [leads]);
+
+  function saveToken() { localStorage.setItem("hs_token", token); setTokenSaved(true); }
+  function saveOwnerMap() { localStorage.setItem("hs_ownermap", JSON.stringify(ownerMap)); }
+  function saveStageMap() { localStorage.setItem("hs_stagemap", JSON.stringify(customStageMap)); }
+
+  function handleCSVFile(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const { headers, rows } = parseCSV(ev.target.result);
+      setCsvHeaders(headers);
+      setCsvData(rows);
+      setFieldMap(autoDetectFields(headers));
+      setPreview(null); setImportResult(null);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  const mappedPreview = useMemo(() => {
+    if (!csvData || !fieldMap.event) return null;
+    return csvData.map((row, i) => {
+      const rawStage = row[fieldMap.stage]||"";
+      const stage    = mapStage(rawStage, customStageMap);
+      const rawOwner = row[fieldMap.assignee]||"";
+      const assignee = ownerMap[rawOwner] || rawOwner;
+      const ref      = row[fieldMap.ref]||"";
+      const duplicate = ref && existingRefs.has(String(ref));
+      return {
+        _idx: i, _raw: row, _duplicate: duplicate,
+        ref, client: row[fieldMap.client]||"", event: row[fieldMap.event]||"",
+        value: parseFloat((row[fieldMap.value]||"").replace(/[£,$, ,]/g,""))||0,
+        date: (() => { const d=row[fieldMap.date]||""; if(!d) return ""; const p=new Date(d); return isNaN(p)?"":p.toISOString().split("T")[0]; })(),
+        stage, assignee, notes: row[fieldMap.notes]||"",
+        _rawStage: rawStage, _rawOwner: rawOwner,
+      };
+    });
+  }, [csvData, fieldMap, customStageMap, ownerMap, existingRefs]);
+
+  const filtered = useMemo(() => {
+    if (!mappedPreview) return null;
+    return stageFilter==="All" ? mappedPreview : mappedPreview.filter(r=>r.stage===stageFilter);
+  }, [mappedPreview, stageFilter]);
+
+  const [selected, setSelected] = useState(new Set());
+  useEffect(() => { if (mappedPreview) setSelected(new Set(mappedPreview.filter(r=>!r._duplicate).map(r=>r._idx))); }, [mappedPreview]);
+
+  function toggleAll(rows) {
+    if (rows.every(r=>selected.has(r._idx))) { const s=new Set(selected); rows.forEach(r=>s.delete(r._idx)); setSelected(s); }
+    else { const s=new Set(selected); rows.forEach(r=>s.add(r._idx)); setSelected(s); }
+  }
+  function toggleRow(idx) { const s=new Set(selected); s.has(idx)?s.delete(idx):s.add(idx); setSelected(s); }
+
+  function doImport() {
+    if (!mappedPreview) return;
+    const toImport = mappedPreview.filter(r=>selected.has(r._idx));
+    const maxId = (leads||[]).reduce((mx,x)=>Math.max(mx,Number(x.id)||0),0);
+    const newLeads = toImport.map((r,i) => ({
+      id: maxId+i+1, client: r.client, event: r.event, ref: r.ref,
+      date: r.date, venue: "", assignee: r.assignee, stage: r.stage,
+      name: "", company: r.client, email: "", value: r.value||"", notes: r.notes,
+      files: [], classCode: "",
+    }));
+    setLeads(l=>[...(l||[]), ...newLeads]);
+    setImportResult({ count: newLeads.length, byStage: {
+      "Closed Won": newLeads.filter(x=>x.stage==="Closed Won").length,
+      "Proposal":   newLeads.filter(x=>x.stage==="Proposal").length,
+      "New":        newLeads.filter(x=>x.stage==="New").length,
+    }});
+    setCsvData(null); setCsvHeaders([]); setPreview(null); setSelected(new Set());
+  }
+
+  const sections = [
+    { id:"import",  label:"📥 Import CSV" },
+    { id:"mapping", label:"🔀 Stage & Owner Mapping" },
+    { id:"connect", label:"🔗 API Connection" },
+  ];
+
+  const uniqueHSStages = useMemo(() => {
+    if (!csvData || !fieldMap.stage) return [];
+    return [...new Set(csvData.map(r=>r[fieldMap.stage]||"").filter(Boolean))];
+  }, [csvData, fieldMap.stage]);
+
+  const uniqueHSOwners = useMemo(() => {
+    if (!csvData || !fieldMap.assignee) return [];
+    return [...new Set(csvData.map(r=>r[fieldMap.assignee]||"").filter(Boolean))];
+  }, [csvData, fieldMap.assignee]);
+
+  return (
+    <div>
+      {/* Sub-nav */}
+      <div style={{display:"flex",gap:4,marginBottom:20}}>
+        {sections.map(s=>(
+          <button key={s.id} onClick={()=>setSection(s.id)} style={{padding:"8px 16px",borderRadius:8,border:`1.5px solid ${section===s.id?"#111827":"#e5e7eb"}`,background:section===s.id?"#111827":"#fff",color:section===s.id?"#fff":"#6b7280",fontWeight:section===s.id?700:500,fontSize:13,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Import CSV ── */}
+      {section==="import"&&(
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          {importResult&&(
+            <div style={{background:"#f0fdf4",border:"1.5px solid #86efac",borderRadius:12,padding:"16px 20px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+              <span style={{fontSize:15,fontWeight:700,color:"#15803d"}}>✓ {importResult.count} deal{importResult.count!==1?"s":""} imported</span>
+              <span style={{fontSize:12,color:"#16a34a"}}>Confirmed: {importResult.byStage["Closed Won"]} · Warm: {importResult.byStage["Proposal"]} · Cold: {importResult.byStage["New"]}</span>
+              <button onClick={()=>setImportResult(null)} style={{marginLeft:"auto",background:"none",border:"none",color:"#9ca3af",cursor:"pointer",fontSize:18,lineHeight:1}}>×</button>
+            </div>
+          )}
+
+          {/* How to export */}
+          <div style={{background:"#fffbeb",border:"1.5px solid #fde68a",borderRadius:12,padding:"14px 18px"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#92400e",marginBottom:8}}>How to export deals from HubSpot</div>
+            <ol style={{margin:0,paddingLeft:18,fontSize:12,color:"#78350f",lineHeight:1.8}}>
+              <li>In HubSpot, go to <strong>CRM → Deals</strong></li>
+              <li>Apply any filters (date range, pipeline, owner)</li>
+              <li>Click <strong>Actions → Export</strong> at the top right</li>
+              <li>Choose <strong>CSV</strong> format and download</li>
+              <li>Upload the file below</li>
+            </ol>
+          </div>
+
+          {!csvData&&(
+            <div className="file-drop" onClick={()=>fileRef.current?.click()} style={{padding:40}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" style={{margin:"0 auto 10px",display:"block"}}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <div style={{fontSize:14,fontWeight:600,color:"#374151",marginBottom:4}}>Upload HubSpot CSV export</div>
+              <div style={{fontSize:12,color:"#9ca3af"}}>Click to browse or drag and drop</div>
+              <input ref={fileRef} type="file" accept=".csv" onChange={handleCSVFile} style={{display:"none"}}/>
+            </div>
+          )}
+
+          {csvData&&!mappedPreview&&(
+            <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:20}}>
+              <div style={{fontWeight:700,fontSize:14,color:"#111827",marginBottom:14}}>Map columns to fields</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                {[
+                  {field:"client", label:"Client / Company"},
+                  {field:"event",  label:"Deal / Event Name"},
+                  {field:"value",  label:"Value / Amount"},
+                  {field:"date",   label:"Close / Event Date"},
+                  {field:"stage",  label:"Deal Stage"},
+                  {field:"assignee",label:"Owner / Assignee"},
+                  {field:"ref",    label:"Deal ID / Reference"},
+                  {field:"notes",  label:"Notes"},
+                ].map(({field,label})=>(
+                  <div key={field}>
+                    <label className="form-label">{label}</label>
+                    <select className="form-input" value={fieldMap[field]||""} onChange={e=>setFieldMap(m=>({...m,[field]:e.target.value}))}>
+                      <option value="">— skip —</option>
+                      {csvHeaders.map(h=><option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <button className="btn-primary" style={{marginTop:16}} onClick={()=>setPreview(true)}>Preview Import →</button>
+            </div>
+          )}
+
+          {mappedPreview&&(
+            <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
+              {/* Stats bar */}
+              <div style={{padding:"12px 20px",background:"#f9fafb",borderBottom:"1px solid #e5e7eb",display:"flex",gap:20,alignItems:"center",flexWrap:"wrap"}}>
+                <span style={{fontSize:13,fontWeight:700,color:"#111827"}}>{mappedPreview.length} deals found</span>
+                <span style={{fontSize:12,color:"#16a34a",fontWeight:600}}>✓ {mappedPreview.filter(r=>r.stage==="Closed Won").length} confirmed</span>
+                <span style={{fontSize:12,color:"#a855f7",fontWeight:600}}>~ {mappedPreview.filter(r=>r.stage==="Proposal").length} warm</span>
+                <span style={{fontSize:12,color:"#06b6d4",fontWeight:600}}>· {mappedPreview.filter(r=>r.stage==="New").length} cold</span>
+                <span style={{fontSize:12,color:"#ef4444",fontWeight:600}}>⚠ {mappedPreview.filter(r=>r._duplicate).length} duplicates (will skip)</span>
+                <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center"}}>
+                  <select className="form-input" style={{width:"auto",fontSize:12,padding:"5px 10px"}} value={stageFilter} onChange={e=>setStageFilter(e.target.value)}>
+                    <option value="All">All stages</option>
+                    <option value="Closed Won">Confirmed</option>
+                    <option value="Proposal">Warm</option>
+                    <option value="New">Cold</option>
+                  </select>
+                  <button className="btn-ghost" style={{fontSize:12,padding:"5px 10px"}} onClick={()=>{ setCsvData(null); setCsvHeaders([]); setPreview(null); }}>← Re-upload</button>
+                </div>
+              </div>
+              {/* Table */}
+              <div style={{overflowX:"auto",maxHeight:400,overflowY:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",minWidth:700}}>
+                  <thead style={{position:"sticky",top:0,zIndex:1}}>
+                    <tr style={{background:"#f9fafb",borderBottom:"1.5px solid #e5e7eb"}}>
+                      <th className="th" style={{width:36}}>
+                        <input type="checkbox" checked={filtered&&filtered.length>0&&filtered.every(r=>selected.has(r._idx))} onChange={()=>filtered&&toggleAll(filtered)}/>
+                      </th>
+                      {["Client","Deal / Event","Date","Value","Stage","Owner","Dup"].map(h=><th key={h} className="th">{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(filtered||[]).length===0&&<tr><td colSpan={8} style={{padding:30,textAlign:"center",color:"#9ca3af",fontSize:13}}>No deals to show</td></tr>}
+                    {(filtered||[]).map(row=>(
+                      <tr key={row._idx} className="row-hover" style={{borderBottom:"1px solid #f3f4f6",opacity:row._duplicate?.9:1}}>
+                        <td style={{padding:"8px 12px"}}>
+                          <input type="checkbox" checked={selected.has(row._idx)} onChange={()=>toggleRow(row._idx)} disabled={row._duplicate}/>
+                        </td>
+                        <td style={{padding:"8px 12px",fontSize:13,fontWeight:600,color:"#111827"}}>{row.client||"—"}</td>
+                        <td style={{padding:"8px 12px",fontSize:13,color:"#374151"}}>{row.event||"—"}</td>
+                        <td style={{padding:"8px 12px",fontSize:12,color:"#6b7280",whiteSpace:"nowrap"}}>{row.date||"—"}</td>
+                        <td style={{padding:"8px 12px",fontSize:12,fontFamily:"'DM Mono',monospace",color:"#111827"}}>{row.value>0?`£${row.value.toLocaleString()}`:"—"}</td>
+                        <td style={{padding:"8px 12px"}}>
+                          <span style={{fontSize:11,fontWeight:700,borderRadius:999,padding:"2px 8px",background:row.stage==="Closed Won"?"#dcfce7":row.stage==="Proposal"?"#faf5ff":"#e8f4fd",color:row.stage==="Closed Won"?"#15803d":row.stage==="Proposal"?"#7c3aed":"#1a6fa8"}}>{row.stage}</span>
+                        </td>
+                        <td style={{padding:"8px 12px",fontSize:12,color:"#6b7280"}}>{row.assignee||"—"}</td>
+                        <td style={{padding:"8px 12px",fontSize:11,color:row._duplicate?"#ef4444":"#d1fae5",fontWeight:700}}>{row._duplicate?"DUP":"✓"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Import bar */}
+              <div style={{padding:"12px 20px",background:"#f9fafb",borderTop:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:12}}>
+                <span style={{fontSize:13,color:"#6b7280"}}>{selected.size} deal{selected.size!==1?"s":""} selected</span>
+                <span style={{fontSize:13,color:"#111827",fontWeight:700}}>Total value: {fmtVal(mappedPreview.filter(r=>selected.has(r._idx)).reduce((s,r)=>s+r.value,0))}</span>
+                <button className="btn-primary" style={{marginLeft:"auto"}} onClick={doImport} disabled={selected.size===0}>
+                  Import {selected.size} deal{selected.size!==1?"s":""} →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Stage & Owner Mapping ── */}
+      {section==="mapping"&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+          {/* Stage mapping */}
+          <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:20}}>
+            <div style={{fontWeight:700,fontSize:14,color:"#111827",marginBottom:4}}>Stage Mapping</div>
+            <div style={{fontSize:12,color:"#9ca3af",marginBottom:14}}>Map HubSpot deal stage names to your tracker categories. Unrecognised stages default to Cold.</div>
+            {uniqueHSStages.length===0&&(
+              <div style={{fontSize:12,color:"#9ca3af",fontStyle:"italic",marginBottom:12}}>Upload a CSV first to see HubSpot stages</div>
+            )}
+            {(uniqueHSStages.length>0?uniqueHSStages:["Closed Won","Proposal Delivered","Contract Sent","Appointment Scheduled","Qualified To Buy"]).map(stage=>(
+              <div key={stage} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                <span style={{fontSize:12,color:"#374151",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={stage}>{stage}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                <select value={customStageMap[stage]||""} onChange={e=>setCustomStageMap(m=>({...m,[stage]:e.target.value}))}
+                  style={{fontSize:12,padding:"4px 8px",border:"1.5px solid #e5e7eb",borderRadius:6,color:"#111827",fontFamily:"inherit",minWidth:130}}>
+                  <option value="">Auto-detect</option>
+                  <option value="Closed Won">✓ Confirmed</option>
+                  <option value="Proposal">~ Warm</option>
+                  <option value="New">· Cold</option>
+                  <option value="Closed Lost">✗ Closed Lost</option>
+                </select>
+              </div>
+            ))}
+            <button className="btn-ghost" style={{marginTop:12,fontSize:12}} onClick={saveStageMap}>Save stage map</button>
+          </div>
+
+          {/* Owner mapping */}
+          <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:20}}>
+            <div style={{fontWeight:700,fontSize:14,color:"#111827",marginBottom:4}}>Owner Mapping</div>
+            <div style={{fontSize:12,color:"#9ca3af",marginBottom:14}}>Map HubSpot owner names to your team members.</div>
+            {uniqueHSOwners.length===0&&(
+              <div style={{fontSize:12,color:"#9ca3af",fontStyle:"italic",marginBottom:12}}>Upload a CSV first to see HubSpot owners</div>
+            )}
+            {(uniqueHSOwners.length>0?uniqueHSOwners:["Example Owner"]).map(owner=>(
+              <div key={owner} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                <span style={{fontSize:12,color:"#374151",flex:1}}>{owner}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                <select value={ownerMap[owner]||""} onChange={e=>setOwnerMap(m=>({...m,[owner]:e.target.value}))}
+                  style={{fontSize:12,padding:"4px 8px",border:"1.5px solid #e5e7eb",borderRadius:6,color:"#111827",fontFamily:"inherit",minWidth:130}}>
+                  <option value="">Keep as-is</option>
+                  {(owners||[]).map(o=><option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+            ))}
+            <button className="btn-ghost" style={{marginTop:12,fontSize:12}} onClick={saveOwnerMap}>Save owner map</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── API Connection ── */}
+      {section==="connect"&&(
+        <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:600}}>
+          <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:20}}>
+            <div style={{fontWeight:700,fontSize:14,color:"#111827",marginBottom:4}}>HubSpot Private App Token</div>
+            <div style={{fontSize:12,color:"#9ca3af",marginBottom:14}}>Your token is stored locally in your browser only — never sent anywhere except HubSpot.</div>
+            <div style={{display:"flex",gap:8}}>
+              <input className="form-input" type="password" value={token} onChange={e=>{setToken(e.target.value);setTokenSaved(false);}} placeholder="pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" style={{flex:1,fontFamily:"'DM Mono',monospace",fontSize:12}}/>
+              <button className="btn-primary" onClick={saveToken}>Save</button>
+            </div>
+            {tokenSaved&&<div style={{fontSize:12,color:"#16a34a",marginTop:8,fontWeight:600}}>✓ Token saved</div>}
+          </div>
+
+          <div style={{background:"#fffbeb",border:"1.5px solid #fde68a",borderRadius:12,padding:"14px 18px"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#92400e",marginBottom:8}}>⚠ Direct API calls from browser</div>
+            <div style={{fontSize:12,color:"#78350f",lineHeight:1.7}}>
+              HubSpot's API does not support direct browser requests (CORS restriction). To enable live API sync, a small server-side proxy is needed — for example a Vercel API route or Google Apps Script endpoint. For now, use the <strong>CSV export/import</strong> above which works without any setup.
+            </div>
+          </div>
+
+          <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:20}}>
+            <div style={{fontWeight:700,fontSize:14,color:"#111827",marginBottom:10}}>How to create a Private App token</div>
+            <ol style={{margin:0,paddingLeft:18,fontSize:12,color:"#374151",lineHeight:1.8}}>
+              <li>In HubSpot, click your account name → <strong>Account Settings</strong></li>
+              <li>Go to <strong>Integrations → Private Apps</strong></li>
+              <li>Click <strong>Create a private app</strong></li>
+              <li>Give it a name (e.g. "ConnectIn Tracker")</li>
+              <li>Under <strong>Scopes</strong>, add: <code style={{background:"#f3f4f6",padding:"1px 5px",borderRadius:4}}>crm.objects.deals.read</code></li>
+              <li>Click <strong>Create app</strong> and copy the token</li>
+            </ol>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────
 export default function App() {
   const [unlocked, setUnlocked] = useState(false);
@@ -1168,6 +1556,7 @@ function EventTracker() {
             {id:"lost",      label:"❌ Closed Lost",        count:lostLeads.length},
             {id:"holidays",  label:"🏖️ Holidays",          count:null},
             {id:"prospects", label:"🔭 Prospects",          count:(prospects||[]).length||null},
+            {id:"hubspot",   label:"🟠 HubSpot",             count:null},
           ].map(tab=>(
             <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
               style={{padding:"10px 18px",background:"none",border:"none",borderBottom:`3px solid ${activeTab===tab.id?"#111827":"transparent"}`,fontWeight:activeTab===tab.id?700:500,fontSize:14,color:activeTab===tab.id?"#111827":"#6b7280",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6,marginBottom:-2,transition:"all .15s"}}>
@@ -1179,6 +1568,7 @@ function EventTracker() {
 
         {activeTab==="holidays"&&<HolidaysTab fy={activeFY}/>}
         {activeTab==="prospects"&&<ProspectsTab prospects={prospects} setProspects={setProspects} owners={owners}/>}
+        {activeTab==="hubspot"&&<HubSpotTab leads={leads} setLeads={setLeads} owners={owners}/>}
 
         {activeTab==="lost"&&(
           <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #fecaca",overflow:"hidden"}}>
