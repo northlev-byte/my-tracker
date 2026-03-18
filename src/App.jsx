@@ -1585,8 +1585,8 @@ function EventTracker() {
   const saveTimer = useRef(null);
   const fileInputRef = useRef(null);
 
-  const currentFY = FINANCIAL_YEARS.find(f=>f.id===activeFY);
-  const holidaysList = useMemo(()=>(activeFY==="fy2627"?HOLIDAYS_2627:HOLIDAYS_2728).filter(h=>h.dates),[activeFY]);
+  const currentFY = FINANCIAL_YEARS.find(f=>f.id===activeFY) || FINANCIAL_YEARS[0];
+  const holidaysList = useMemo(()=>(activeFY==="fy2728"?HOLIDAYS_2728:HOLIDAYS_2627).filter(h=>h.dates),[activeFY]);
 
   // Track whether initial load is complete — prevents save firing before load finishes
   const loadedRef = useRef(false);
@@ -1678,12 +1678,13 @@ function EventTracker() {
     },1500);
   },[leads,owners,prospects]);
 
-  // Filter leads to current FY
+  // Filter leads to current FY (or all leads if "all" selected)
   const fyLeads = useMemo(()=>{
     if(!leads) return [];
+    if(activeFY==="all") return [...leads];
     const keys = new Set(currentFY.months);
     return leads.filter(l=>keys.has(monthKey(l.date)||""));
-  },[leads,currentFY]);
+  },[leads,currentFY,activeFY]);
 
   const lostLeads = useMemo(()=> fyLeads.filter(l=>l.stage==="Closed Lost"),[fyLeads]);
 
@@ -1933,7 +1934,7 @@ function EventTracker() {
           </div>
           <div className="app-header-right">
             <div style={{display:"flex",gap:6}}>
-              {FINANCIAL_YEARS.map(fy=>(
+              {[...FINANCIAL_YEARS,{id:"all",label:"All"}].map(fy=>(
                 <button key={fy.id} className={`fy-tab${activeFY===fy.id?" fy-tab-active":""}`} onClick={()=>setActiveFY(fy.id)}>{fy.label}</button>
               ))}
             </div>
