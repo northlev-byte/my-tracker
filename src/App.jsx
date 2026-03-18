@@ -1861,8 +1861,11 @@ function EventTracker() {
         .section-divider{font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;padding:14px 0 8px;border-bottom:1px solid #f3f4f6;margin-bottom:14px}
         .th{padding:11px 12px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
         .th-lead{color:#a78bfa}
-        .fy-tab{padding:7px 16px;border-radius:8px;border:1.5px solid #e5e7eb;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;background:#fff;color:#6b7280}
+        .fy-tab{padding:7px 16px;border-radius:8px;border:1.5px solid #e5e7eb;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;background:#fff;color:#6b7280;white-space:nowrap}
         .fy-tab-active{background:#111827;color:#fff;border-color:#111827}
+        .tab-btn{padding:10px 16px;font-size:14px;white-space:nowrap;flex-shrink:0}
+        .tab-label-short{display:none}
+        .tab-label-full{display:inline}
         .file-drop{border:2px dashed #e5e7eb;border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:all .15s}
         .file-drop:hover{border-color:#6366f1;background:#fafafe}
 
@@ -1882,30 +1885,34 @@ function EventTracker() {
         /* ── Mobile ─────────────────────────────────────── */
         @media(max-width:768px){
           .app-header-inner{height:auto;padding:10px 14px;flex-wrap:wrap;gap:8px}
-          .app-header-right{gap:6px;flex-wrap:wrap}
+          .app-header-right{gap:6px;flex-wrap:wrap;justify-content:flex-end}
           .app-main{padding:14px 12px}
           .save-badge{display:none}
           .btn-label{display:none}
-          .fy-tab{padding:6px 10px;font-size:12px}
+          .fy-tab{padding:5px 10px;font-size:12px}
           .btn-ghost,.btn-primary{padding:8px 10px}
-          .kanban-grid{grid-template-columns:repeat(3,minmax(220px,1fr));overflow-x:auto;-webkit-overflow-scrolling:touch}
-          .modal{padding:20px 16px !important;width:100% !important;border-radius:12px !important}
+          .kanban-grid{grid-template-columns:repeat(3,minmax(200px,1fr));overflow-x:auto;-webkit-overflow-scrolling:touch}
+          .modal{padding:20px 16px !important;width:100% !important;border-radius:16px 16px 0 0 !important;max-height:92vh !important}
+          .overlay{align-items:flex-end !important;padding:0 !important}
           .stat-card{padding:14px 16px}
           .leads-table-wrap{display:none}
           .leads-cards{display:flex;flex-direction:column;gap:8px}
           .controls-row{flex-direction:column;align-items:stretch}
           .controls-search{min-width:0}
-          .controls-filters{width:100%}
-          .controls-filters select{flex:1;min-width:0}
-          .app-tabs button{padding:8px 12px;font-size:13px}
-          .overlay{align-items:flex-end;padding:0}
-          .modal{border-radius:16px 16px 0 0 !important;max-height:92vh !important}
+          .controls-filters{width:100%;flex-wrap:wrap}
+          .controls-filters select{flex:1;min-width:120px}
+          .tab-btn{padding:8px 10px;font-size:13px}
+          .tab-label-full{display:none}
+          .tab-label-short{display:inline}
+          .view-switcher{align-self:flex-start}
+          .app-header-title{font-size:14px !important}
         }
         @media(max-width:480px){
-          .app-header-inner{padding:10px 12px}
-          .app-main{padding:12px 8px}
-          .kanban-grid{grid-template-columns:repeat(6,minmax(200px,1fr));overflow-x:auto}
-          .app-tabs button{font-size:12px;padding:7px 10px}
+          .app-header-inner{padding:8px 10px}
+          .app-main{padding:10px 8px}
+          .kanban-grid{grid-template-columns:repeat(6,minmax(180px,1fr));overflow-x:auto}
+          .tab-btn{padding:7px 8px;font-size:12px}
+          .fy-tab{padding:4px 8px;font-size:11px}
         }
       `}</style>
 
@@ -1916,7 +1923,7 @@ function EventTracker() {
             <div style={{width:30,height:30,background:"#111827",borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
             </div>
-            <span style={{fontWeight:700,fontSize:16,color:"#111827",letterSpacing:"-.02em",whiteSpace:"nowrap"}}>Event & Lead Tracker</span>
+            <span className="app-header-title" style={{fontWeight:700,fontSize:16,color:"#111827",letterSpacing:"-.02em",whiteSpace:"nowrap"}}>Event & Lead Tracker</span>
             {saving&&<span style={{fontSize:11,color:"#f59e0b",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:999,padding:"2px 8px",fontWeight:600,whiteSpace:"nowrap"}}>⏳ Saving…</span>}
             {!saving&&saveError&&<span style={{fontSize:11,color:"#ef4444",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:999,padding:"2px 8px",fontWeight:600,whiteSpace:"nowrap"}}>⚠️ Save failed</span>}
             {!saving&&!saveError&&lastSaved&&<span className="save-badge" style={{fontSize:11,color:"#22c55e",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:999,padding:"2px 8px",fontWeight:600,whiteSpace:"nowrap"}}>✓ Saved</span>}
@@ -1943,15 +1950,16 @@ function EventTracker() {
         {/* Main tab navigation */}
         <div className="app-tabs" style={{display:"flex",gap:6,marginBottom:20,borderBottom:"2px solid #e5e7eb",paddingBottom:0}}>
           {[
-            {id:"events",    label:"📅 Events & Pipeline", count:fyLeads.filter(l=>l.stage!=="Closed Lost").length},
-            {id:"lost",      label:"❌ Closed Lost",        count:lostLeads.length},
-            {id:"holidays",  label:"🏖️ Holidays",          count:null},
-            {id:"prospects", label:"🔭 Prospects",          count:(prospects||[]).length||null},
-            {id:"hubspot",   label:"🟠 HubSpot",             count:null},
+            {id:"events",    label:"📅 Events & Pipeline", short:"📅 Events", count:fyLeads.filter(l=>l.stage!=="Closed Lost").length},
+            {id:"lost",      label:"❌ Closed Lost",        short:"❌ Lost",   count:lostLeads.length},
+            {id:"holidays",  label:"🏖️ Holidays",          short:"🏖️ Hols",  count:null},
+            {id:"prospects", label:"🔭 Prospects",          short:"🔭 Leads",  count:(prospects||[]).length||null},
+            {id:"hubspot",   label:"🟠 HubSpot",             short:"🟠 HS",    count:null},
           ].map(tab=>(
-            <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
-              style={{padding:"10px 18px",background:"none",border:"none",borderBottom:`3px solid ${activeTab===tab.id?"#111827":"transparent"}`,fontWeight:activeTab===tab.id?700:500,fontSize:14,color:activeTab===tab.id?"#111827":"#6b7280",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6,marginBottom:-2,transition:"all .15s"}}>
-              {tab.label}
+            <button key={tab.id} className="tab-btn" onClick={()=>setActiveTab(tab.id)}
+              style={{background:"none",border:"none",borderBottom:`3px solid ${activeTab===tab.id?"#111827":"transparent"}`,fontWeight:activeTab===tab.id?700:500,color:activeTab===tab.id?"#111827":"#6b7280",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6,marginBottom:-2,transition:"all .15s"}}>
+              <span className="tab-label-full">{tab.label}</span>
+              <span className="tab-label-short" style={{display:"none"}}>{tab.short}</span>
               {tab.count!==null&&<span style={{background:activeTab===tab.id?"#111827":"#f3f4f6",color:activeTab===tab.id?"#fff":"#6b7280",borderRadius:999,fontSize:11,fontWeight:700,padding:"1px 7px"}}>{tab.count}</span>}
             </button>
           ))}
@@ -2050,7 +2058,7 @@ function EventTracker() {
               <option value="value">Sort: Value</option>
               <option value="ref">Sort: Ref</option>
             </select>
-            <div style={{display:"flex",gap:3,background:"#f3f4f6",borderRadius:8,padding:3}}>
+            <div className="view-switcher" style={{display:"flex",gap:3,background:"#f3f4f6",borderRadius:8,padding:3}}>
               {[{id:"table",label:"Table"},{id:"kanban",label:"Kanban"},{id:"calendar",label:"📅 Cal"}].map(v=>(
                 <button key={v.id} onClick={()=>setView(v.id)} style={{padding:"5px 12px",borderRadius:6,border:"none",background:view===v.id?"#fff":"transparent",fontWeight:600,fontSize:12,color:view===v.id?"#111827":"#9ca3af",cursor:"pointer",boxShadow:view===v.id?"0 1px 4px rgba(0,0,0,.08)":"none",fontFamily:"inherit",transition:"all .15s"}}>{v.label}</button>
               ))}
