@@ -1714,6 +1714,7 @@ function EventTracker() {
   function updateField(id,field,val) { setLeads(l=>l.map(x=>x.id===id?{...x,[field]:val}:x)); }
   function updateStage(id,stage)     { setLeads(l=>l.map(x=>x.id===id?{...x,stage}:x)); }
   function deleteLead(id)            { setLeads(l=>l.filter(x=>x.id!==id)); }
+  function duplicateLead(lead)       { setLeads(l=>{ const maxId=l.reduce((mx,x)=>Math.max(mx,Number(x.id)||0),0); return [...l,{...lead,id:maxId+1,ref:""}]; }); }
   function openAdd()   { setForm({...emptyForm,date:new Date().toISOString().split("T")[0]}); setEditId(null); setShowForm(true); }
   function openEdit(l) { setForm({...l,files:l.files||[]}); setEditId(l.id); setShowForm(true); }
   function saveForm() {
@@ -2194,7 +2195,9 @@ function EventTracker() {
                             📎 {fileCount>0?fileCount:""}
                           </button>
                         </td>
-                        <td style={{padding:"10px 12px"}}>
+                        <td style={{padding:"6px 8px",whiteSpace:"nowrap"}}>
+                          <button title="Duplicate" onClick={()=>duplicateLead(lead)}
+                            style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:6,padding:"4px 8px",fontSize:12,cursor:"pointer",color:"#0369a1",fontWeight:600,fontFamily:"inherit",marginRight:4}}>⧉</button>
                           <button className="btn-danger" onClick={()=>deleteLead(lead.id)}>✕</button>
                         </td>
                       </tr>
@@ -2240,6 +2243,8 @@ function EventTracker() {
                       📎 {fileCount>0?fileCount:"Files"}
                     </button>
                     <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>duplicateLead(lead)}
+                        style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:7,padding:"6px 12px",fontSize:12,cursor:"pointer",color:"#0369a1",fontWeight:600,fontFamily:"inherit"}}>⧉ Copy</button>
                       <button onClick={()=>openEdit(lead)}
                         style={{background:"#f3f4f6",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,cursor:"pointer",color:"#374151",fontWeight:600,fontFamily:"inherit"}}>
                         Edit
