@@ -30,6 +30,10 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === "GET") {
+      // Debug: ?url=1 returns the GAS_URL this build is using — remove once confirmed
+      if (req.url && req.url.includes("url=1")) {
+        return res.status(200).json({ GAS_URL });
+      }
       const gasRes = await fetch(GAS_URL);
       const text = await gasRes.text();
       res.setHeader("Content-Type", "application/json");
