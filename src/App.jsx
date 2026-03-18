@@ -1717,17 +1717,28 @@ function EventTracker() {
 
   // File handling — upload to Google Drive via Apps Script, store URL
   const [fileUploadError, setFileUploadError] = useState(null);
+  const [fileUploadDebug, setFileUploadDebug] = useState(null);
+
+  function extractGASError(html) {
+    const exc = html.match(/Exception:\s*([^<\n]+)/);
+    if (exc) return "Exception: " + exc[1].trim();
+    const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (body) return body[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().substring(0, 400);
+    return html.substring(0, 400);
+  }
 
   async function handleFileUpload(leadId, e) {
     const files = Array.from(e.target.files);
     e.target.value = "";
     setFileUploadError(null);
+    setFileUploadDebug(null);
     for (const file of files) {
       const tempId = Date.now() + Math.random();
       setLeads(l => l.map(x => x.id === leadId
         ? { ...x, files: [...(x.files||[]), { id: tempId, name: file.name, size: file.size, uploading: true }] }
         : x
       ));
+      const debug = { file: file.name, sizekb: (file.size/1024).toFixed(1), mimeType: file.type };
       try {
         const base64 = await new Promise((res, rej) => {
           const r = new FileReader();
@@ -1735,32 +1746,59 @@ function EventTracker() {
           r.onerror = rej;
           r.readAsDataURL(file);
         });
-        const resp = await fetch(SHEET_URL, {
-          method: "POST",
-          body: JSON.stringify({ action: "uploadFile", fileName: file.name, mimeType: file.type || "application/octet-stream", fileData: base64 }),
-        });
-        // Read as text first — resp.json() throws silently on non-JSON responses (HTML errors, "ok", etc.)
+        const bodyStr = JSON.stringify({ action: "uploadFile", fileName: file.name, mimeType: file.type || "application/octet-stream", fileData: base64 });
+        debug.payloadKB = (bodyStr.length / 1024).toFixed(1);
+        debug.base64Prefix = base64.substring(0, 60);
+
+        console.group(`[ConnectIn] File upload: ${file.name}`);
+        console.log("URL:", SHEET_URL);
+        console.log("Payload size:", debug.payloadKB, "KB");
+        console.log("File type:", file.type, "| File size:", debug.sizekb, "KB");
+
+        const resp = await fetch(SHEET_URL, { method: "POST", body: bodyStr });
+
+        debug.httpStatus = resp.status;
+        debug.httpStatusText = resp.statusText;
+        debug.finalUrl = resp.url;
+        debug.redirected = resp.redirected;
+        console.log("HTTP status:", resp.status, resp.statusText);
+        console.log("Final URL (after redirects):", resp.url);
+        console.log("Was redirected:", resp.redirected);
+
         const text = await resp.text();
-        // Detect: old script (not yet updated) returns plain "ok"
-        if (text.trim() === "ok") throw new Error("Apps Script not updated — it returned 'ok' instead of a Drive URL. Update your Apps Script and re-deploy (see setup instructions below).");
-        // Detect: GAS returned an HTML error page (script threw, e.g. Drive not authorised)
-        if (text.trim().startsWith("<")) throw new Error("Apps Script threw an error (received HTML response). Most likely cause: DriveApp is not yet authorised. Open your Apps Script editor, run any function that uses DriveApp once to trigger the OAuth prompt, then re-deploy.");
+        debug.rawResponse = text.substring(0, 600);
+        console.log("Raw response (first 600 chars):", text.substring(0, 600));
+        console.groupEnd();
+
+        if (text.trim() === "ok") {
+          debug.diagnosis = "Script not updated — returned plain 'ok'";
+          throw new Error("Apps Script returned 'ok' — the doPost uploadFile handler is not in the deployed script yet. Re-deploy after adding the handler.");
+        }
+        if (text.trim().startsWith("<")) {
+          const gasMsg = extractGASError(text);
+          debug.diagnosis = "HTML error page from GAS: " + gasMsg;
+          throw new Error(`Apps Script error page received. Extracted message: ${gasMsg}`);
+        }
         let result;
         try { result = JSON.parse(text); }
-        catch { throw new Error(`Apps Script returned unexpected response: ${text.substring(0, 120)}`); }
+        catch { throw new Error(`Response is not JSON: ${text.substring(0, 150)}`); }
+        debug.parsedResponse = result;
         if (result.error) throw new Error(`Drive error from script: ${result.error}`);
-        if (!result.driveUrl) throw new Error(`Script responded but no driveUrl in payload: ${JSON.stringify(result)}`);
+        if (!result.driveUrl) throw new Error(`Script returned JSON but no driveUrl field: ${JSON.stringify(result)}`);
+
         setLeads(l => l.map(x => x.id === leadId
           ? { ...x, files: (x.files||[]).map(f => f.id === tempId ? { id: tempId, name: file.name, size: file.size, type: file.type, driveUrl: result.driveUrl } : f) }
           : x
         ));
       } catch (err) {
-        console.error("File upload failed:", err);
+        debug.error = err.message;
+        console.error("[ConnectIn] Upload failed:", err.message, "\nDebug info:", debug);
         setLeads(l => l.map(x => x.id === leadId
           ? { ...x, files: (x.files||[]).filter(f => f.id !== tempId) }
           : x
         ));
         setFileUploadError(err.message);
+        setFileUploadDebug(debug);
       }
     }
   }
@@ -2179,25 +2217,39 @@ function EventTracker() {
       </div>
       {/* Files Modal */}
       {showFiles&&activeLead&&(
-        <div className="overlay" onClick={e=>e.target===e.currentTarget&&{ setShowFiles(null); setFileUploadError(null); }}>
+        <div className="overlay" onClick={e=>e.target===e.currentTarget&&{ setShowFiles(null); setFileUploadError(null); setFileUploadDebug(null); }}>
           <div className="modal" style={{width:500}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
               <div>
                 <h2 style={{margin:0,fontSize:17,fontWeight:700,color:"#111827"}}>📎 Files</h2>
                 <div style={{fontSize:13,color:"#6b7280",marginTop:2}}>{activeLead.client} — {activeLead.event}</div>
               </div>
-              <button onClick={()=>{ setShowFiles(null); setFileUploadError(null); }} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#9ca3af",lineHeight:1}}>×</button>
+              <button onClick={()=>{ setShowFiles(null); setFileUploadError(null); setFileUploadDebug(null); }} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#9ca3af",lineHeight:1}}>×</button>
             </div>
 
             {/* Upload error banner */}
             {fileUploadError && (
-              <div style={{background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",gap:10,alignItems:"flex-start"}}>
-                <span style={{fontSize:16,flexShrink:0}}>⚠️</span>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:13,fontWeight:700,color:"#b91c1c",marginBottom:3}}>Upload failed</div>
-                  <div style={{fontSize:12,color:"#991b1b",lineHeight:1.5}}>{fileUploadError}</div>
+              <div style={{background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
+                <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:8}}>
+                  <span style={{fontSize:16,flexShrink:0}}>⚠️</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:700,color:"#b91c1c",marginBottom:3}}>Upload failed</div>
+                    <div style={{fontSize:12,color:"#991b1b",lineHeight:1.6}}>{fileUploadError}</div>
+                  </div>
+                  <button onClick={()=>{setFileUploadError(null);setFileUploadDebug(null);}} style={{background:"none",border:"none",color:"#fca5a5",fontSize:18,cursor:"pointer",lineHeight:1,flexShrink:0}}>×</button>
                 </div>
-                <button onClick={()=>setFileUploadError(null)} style={{background:"none",border:"none",color:"#fca5a5",fontSize:18,cursor:"pointer",lineHeight:1,flexShrink:0}}>×</button>
+                {fileUploadDebug && (
+                  <details style={{marginTop:4}}>
+                    <summary style={{fontSize:11,color:"#b91c1c",cursor:"pointer",fontWeight:700}}>Debug info (open &amp; share with developer)</summary>
+                    <pre style={{fontSize:10,background:"#111827",color:"#fca5a5",borderRadius:6,padding:"8px 10px",overflowX:"auto",marginTop:6,whiteSpace:"pre-wrap",wordBreak:"break-all"}}>
+                      {JSON.stringify(fileUploadDebug, null, 2)}
+                    </pre>
+                    <button onClick={()=>navigator.clipboard?.writeText(JSON.stringify(fileUploadDebug,null,2))}
+                      style={{fontSize:11,background:"#fecaca",border:"none",borderRadius:5,padding:"4px 10px",color:"#7f1d1d",cursor:"pointer",fontWeight:600,fontFamily:"inherit",marginTop:4}}>
+                      Copy debug info
+                    </button>
+                  </details>
+                )}
               </div>
             )}
 
@@ -2274,7 +2326,7 @@ function EventTracker() {
             </details>
 
             <div style={{marginTop:20,textAlign:"right"}}>
-              <button className="btn-ghost" onClick={()=>{ setShowFiles(null); setFileUploadError(null); }}>Done</button>
+              <button className="btn-ghost" onClick={()=>{ setShowFiles(null); setFileUploadError(null); setFileUploadDebug(null); }}>Done</button>
             </div>
           </div>
         </div>
