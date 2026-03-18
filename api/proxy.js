@@ -3,7 +3,7 @@
 // from a different origin, but a server-to-server call has no such restriction.
 
 const GAS_URL =
-  "https://script.google.com/macros/s/AKfycbx43ILL71R_N4G-6wsq2wXDtHau_ky1Ei78Xfu1TLcQpvWv8OPSX9lDCkBgKm_ckIFp/exec";
+  "https://script.google.com/macros/s/AKfycbwvyKRtB0edbEhb3kFul0NMm5TXCWypZIXii-P1okvX1M6NEdjL6-kzFAtIEtE3BeEd/exec";
 
 export const config = {
   api: {

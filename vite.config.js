@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 
 // Used only for local dev proxy — in production Vercel routes /api/proxy to api/proxy.js
 const GAS_ORIGIN = "https://script.google.com";
-const GAS_PATH   = "/macros/s/AKfycbx43ILL71R_N4G-6wsq2wXDtHau_ky1Ei78Xfu1TLcQpvWv8OPSX9lDCkBgKm_ckIFp/exec";
+const GAS_PATH   = "/macros/s/AKfycbwvyKRtB0edbEhb3kFul0NMm5TXCWypZIXii-P1okvX1M6NEdjL6-kzFAtIEtE3BeEd/exec";
 
 export default defineConfig({
   plugins: [react()],
