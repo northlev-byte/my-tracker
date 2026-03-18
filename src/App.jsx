@@ -1873,25 +1873,39 @@ function EventTracker() {
         .app-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;scrollbar-width:none}
         .app-tabs::-webkit-scrollbar{display:none}
         .kanban-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+        .leads-table-wrap{display:block}
+        .leads-cards{display:none}
+        .controls-row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+        .controls-search{flex:1;min-width:180px;position:relative}
+        .controls-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 
         /* ── Mobile ─────────────────────────────────────── */
         @media(max-width:768px){
           .app-header-inner{height:auto;padding:10px 14px;flex-wrap:wrap;gap:8px}
-          .app-header-right{gap:6px}
+          .app-header-right{gap:6px;flex-wrap:wrap}
           .app-main{padding:14px 12px}
           .save-badge{display:none}
           .btn-label{display:none}
           .fy-tab{padding:6px 10px;font-size:12px}
           .btn-ghost,.btn-primary{padding:8px 10px}
           .kanban-grid{grid-template-columns:repeat(3,minmax(220px,1fr));overflow-x:auto;-webkit-overflow-scrolling:touch}
-          .modal{padding:20px 16px !important}
+          .modal{padding:20px 16px !important;width:100% !important;border-radius:12px !important}
           .stat-card{padding:14px 16px}
+          .leads-table-wrap{display:none}
+          .leads-cards{display:flex;flex-direction:column;gap:8px}
+          .controls-row{flex-direction:column;align-items:stretch}
+          .controls-search{min-width:0}
+          .controls-filters{width:100%}
+          .controls-filters select{flex:1;min-width:0}
+          .app-tabs button{padding:8px 12px;font-size:13px}
+          .overlay{align-items:flex-end;padding:0}
+          .modal{border-radius:16px 16px 0 0 !important;max-height:92vh !important}
         }
         @media(max-width:480px){
           .app-header-inner{padding:10px 12px}
-          .app-main{padding:12px 10px}
+          .app-main{padding:12px 8px}
           .kanban-grid{grid-template-columns:repeat(6,minmax(200px,1fr));overflow-x:auto}
-          .app-tabs button{font-size:12px;padding:8px 10px}
+          .app-tabs button{font-size:12px;padding:7px 10px}
         }
       `}</style>
 
@@ -2016,31 +2030,33 @@ function EventTracker() {
         </div>
 
         {/* Controls */}
-        <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
-          <div style={{flex:1,minWidth:180,position:"relative"}}>
+        <div className="controls-row">
+          <div className="controls-search">
             <svg style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input className="form-input" style={{paddingLeft:30,fontSize:13}} placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)}/>
           </div>
-          <select className="form-input" style={{width:"auto",fontSize:13}} value={filterStage} onChange={e=>setFilterStage(e.target.value)}>
-            <option value="All">All Stages</option>
-            {STAGES.map(s=><option key={s}>{s}</option>)}
-          </select>
-          <select className="form-input" style={{width:"auto",fontSize:13}} value={filterAssignee} onChange={e=>setFilterAssignee(e.target.value)}>
-            <option value="All">All Owners</option>
-            {(owners||[]).map(a=><option key={a}>{a}</option>)}
-          </select>
-          <select className="form-input" style={{width:"auto",fontSize:13}} value={sortBy} onChange={e=>setSortBy(e.target.value)}>
-            <option value="date">Sort: Date</option>
-            <option value="client">Sort: Client</option>
-            <option value="value">Sort: Value</option>
-            <option value="ref">Sort: Ref</option>
-          </select>
-          <div style={{display:"flex",gap:3,background:"#f3f4f6",borderRadius:8,padding:3}}>
-            {[{id:"table",label:"Table"},{id:"kanban",label:"Kanban"},{id:"calendar",label:"📅 Cal"}].map(v=>(
-              <button key={v.id} onClick={()=>setView(v.id)} style={{padding:"5px 12px",borderRadius:6,border:"none",background:view===v.id?"#fff":"transparent",fontWeight:600,fontSize:12,color:view===v.id?"#111827":"#9ca3af",cursor:"pointer",boxShadow:view===v.id?"0 1px 4px rgba(0,0,0,.08)":"none",fontFamily:"inherit",transition:"all .15s"}}>{v.label}</button>
-            ))}
+          <div className="controls-filters">
+            <select className="form-input" style={{fontSize:13}} value={filterStage} onChange={e=>setFilterStage(e.target.value)}>
+              <option value="All">All Stages</option>
+              {STAGES.map(s=><option key={s}>{s}</option>)}
+            </select>
+            <select className="form-input" style={{fontSize:13}} value={filterAssignee} onChange={e=>setFilterAssignee(e.target.value)}>
+              <option value="All">All Owners</option>
+              {(owners||[]).map(a=><option key={a}>{a}</option>)}
+            </select>
+            <select className="form-input" style={{fontSize:13}} value={sortBy} onChange={e=>setSortBy(e.target.value)}>
+              <option value="date">Sort: Date</option>
+              <option value="client">Sort: Client</option>
+              <option value="value">Sort: Value</option>
+              <option value="ref">Sort: Ref</option>
+            </select>
+            <div style={{display:"flex",gap:3,background:"#f3f4f6",borderRadius:8,padding:3}}>
+              {[{id:"table",label:"Table"},{id:"kanban",label:"Kanban"},{id:"calendar",label:"📅 Cal"}].map(v=>(
+                <button key={v.id} onClick={()=>setView(v.id)} style={{padding:"5px 12px",borderRadius:6,border:"none",background:view===v.id?"#fff":"transparent",fontWeight:600,fontSize:12,color:view===v.id?"#111827":"#9ca3af",cursor:"pointer",boxShadow:view===v.id?"0 1px 4px rgba(0,0,0,.08)":"none",fontFamily:"inherit",transition:"all .15s"}}>{v.label}</button>
+              ))}
+            </div>
+            <span style={{fontSize:12,color:"#9ca3af",whiteSpace:"nowrap"}}>{filtered.length} result{filtered.length!==1?"s":""}</span>
           </div>
-          <span style={{fontSize:12,color:"#9ca3af",whiteSpace:"nowrap"}}>{filtered.length} result{filtered.length!==1?"s":""}</span>
         </div>
 
         {/* Holiday clash summary */}
@@ -2082,7 +2098,7 @@ function EventTracker() {
 
         {/* Table */}
         {view==="table"&&(
-          <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #e5e7eb",overflow:"hidden"}}>
+          <div className="leads-table-wrap" style={{background:"#fff",borderRadius:12,border:"1.5px solid #e5e7eb",overflow:"hidden"}}>
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",minWidth:1200}}>
                 <thead>
@@ -2179,6 +2195,53 @@ function EventTracker() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* Mobile card view — shown instead of table on small screens */}
+        {view==="table"&&(
+          <div className="leads-cards">
+            {filtered.length===0&&<div style={{padding:40,textAlign:"center",color:"#9ca3af",fontSize:14}}>No results found.</div>}
+            {filtered.map(lead=>{
+              const sc=STAGE_COLORS[lead.stage]||STAGE_COLORS["New"];
+              const mc=lead.date?getMonthColor(monthKey(lead.date)):null;
+              const fileCount=(lead.files||[]).length;
+              return (
+                <div key={lead.id} style={{background:"#fff",borderRadius:10,border:"1.5px solid #e5e7eb",padding:"12px 14px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:4}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
+                      {mc&&<span style={{width:8,height:8,borderRadius:"50%",background:mc.bar,display:"inline-block",flexShrink:0}}/>}
+                      <span style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.client}</span>
+                    </div>
+                    <select value={lead.stage} onChange={e=>updateStage(lead.id,e.target.value)}
+                      style={{background:sc.bg,color:sc.text,border:"none",borderRadius:999,padding:"3px 8px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",outline:"none",flexShrink:0}}>
+                      {STAGES.map(s=><option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div style={{fontSize:13,color:"#6b7280",marginBottom:8}}>{lead.event}</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:8,fontSize:12,color:"#9ca3af",marginBottom:10}}>
+                    {lead.date&&<span>📅 {fmt(lead.date)}</span>}
+                    {lead.assignee&&<span>👤 {lead.assignee}</span>}
+                    {lead.venue&&<span style={{color:lead.venue?.trim().toUpperCase()==="TBC"?"#f59e0b":"#9ca3af",fontWeight:lead.venue?.trim().toUpperCase()==="TBC"?700:400}}>📍 {lead.venue}</span>}
+                    {lead.value&&<span style={{color:"#111827",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>£{Number(lead.value).toLocaleString()}</span>}
+                  </div>
+                  {lead.notes&&<div style={{fontSize:12,color:"#9ca3af",marginBottom:8,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.notes}</div>}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                    <button onClick={()=>setShowFiles(lead.id)}
+                      style={{background:fileCount>0?"#eff6ff":"#f9fafb",border:`1px solid ${fileCount>0?"#93c5fd":"#e5e7eb"}`,borderRadius:7,padding:"6px 14px",fontSize:12,cursor:"pointer",color:fileCount>0?"#1d4ed8":"#9ca3af",fontWeight:600,fontFamily:"inherit"}}>
+                      📎 {fileCount>0?fileCount:"Files"}
+                    </button>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>openEdit(lead)}
+                        style={{background:"#f3f4f6",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,cursor:"pointer",color:"#374151",fontWeight:600,fontFamily:"inherit"}}>
+                        Edit
+                      </button>
+                      <button className="btn-danger" onClick={()=>deleteLead(lead.id)}>✕</button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
