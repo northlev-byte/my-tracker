@@ -1720,7 +1720,11 @@ function EventTracker() {
   function updateStage(id,stage)     { setLeads(l=>l.map(x=>x.id===id?{...x,stage}:x)); }
   function deleteLead(id)            { setLeads(l=>l.filter(x=>x.id!==id)); }
   function duplicateLead(lead)       { setLeads(l=>{ const maxId=l.reduce((mx,x)=>Math.max(mx,Number(x.id)||0),0); return [...l,{...lead,id:maxId+1,ref:""}]; }); }
-  function openAdd()   { setForm({...emptyForm,date:new Date().toISOString().split("T")[0]}); setEditId(null); setShowForm(true); }
+  function openAdd()   {
+    const maxRef = (leads||[]).reduce((mx,l)=>{ const n=parseInt(l.ref,10); return !isNaN(n)&&n>mx?n:mx; },0);
+    setForm({...emptyForm, date:new Date().toISOString().split("T")[0], ref:maxRef>0?String(maxRef+1):""});
+    setEditId(null); setShowForm(true);
+  }
   function openEdit(l) { setForm({...l,files:l.files||[]}); setEditId(l.id); setShowForm(true); }
   function saveForm() {
     if(!form.client?.trim()) return;
