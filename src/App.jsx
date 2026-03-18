@@ -1590,6 +1590,8 @@ function EventTracker() {
 
   // Track whether initial load is complete — prevents save firing before load finishes
   const loadedRef = useRef(false);
+  // Track how many leads Sheets had at load time — saves with fewer entries are blocked
+  const sheetLeadCountRef = useRef(0);
 
   // Load from Google Sheets — Sheet is ALWAYS the source of truth
   useEffect(()=>{
@@ -1603,6 +1605,7 @@ function EventTracker() {
           const sheetLeads = data.leads
             .map(l=>({...l, files:l.files||[], classCode:l.classCode||""}))
             .filter(l=>{ if(seen.has(String(l.id))) return false; seen.add(String(l.id)); return true; });
+          sheetLeadCountRef.current = sheetLeads.length;
           setLeads(sheetLeads);
           localStorage.setItem("connectin_leads", JSON.stringify(sheetLeads));
         } else {
@@ -1658,10 +1661,16 @@ function EventTracker() {
             .filter(f => !f.uploading)
             .map(f => ({ id: f.id, name: f.name, size: f.size, type: f.type || "", driveUrl: f.driveUrl || null })),
         }));
+        // Safety check — never save fewer leads than Sheets currently holds
+        if (sheetLeadCountRef.current > 0 && leadsToSave.length < sheetLeadCountRef.current) {
+          console.warn(`[save] blocked: would write ${leadsToSave.length} leads but Sheets has ${sheetLeadCountRef.current}`);
+          setSaveError(true);
+          return;
+        }
         const saveRes = await fetch(SHEET_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads:leadsToSave,owners,prospects})});
         const saveText = await saveRes.text();
-        if (saveText.trimStart().startsWith("<")) { setSaveError(true); } // GAS returned an HTML error page
-        else { setLastSaved(new Date()); }
+        if (saveText.trimStart().startsWith("<")) { setSaveError(true); }
+        else { sheetLeadCountRef.current = leadsToSave.length; setLastSaved(new Date()); }
       } catch { setSaveError(true); }
       finally { setSaving(false); }
     },1500);
