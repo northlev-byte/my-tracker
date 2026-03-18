@@ -1,6 +1,4 @@
 // Vercel serverless proxy — forwards all requests to Google Apps Script.
-// This exists purely to avoid CORS: browsers can't POST directly to script.google.com
-// from a different origin, but a server-to-server call has no such restriction.
 
 const GAS_URL =
   "https://script.google.com/macros/s/AKfycby9rmRaKYipf88AuEdfucwTlq1manzjtUEprI00SiRPJv8LUL-n5oASRjN6YG8YeqLf/exec";
@@ -30,7 +28,6 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === "GET") {
-      // Debug: ?url=1 returns the GAS_URL this build is using — remove once confirmed
       if (req.url && req.url.includes("url=1")) {
         return res.status(200).json({ GAS_URL });
       }
@@ -42,55 +39,48 @@ export default async function handler(req, res) {
 
     if (req.method === "POST") {
       const rawBody = await readRawBody(req);
-      const bodyStr = rawBody.toString("utf8");
 
-      console.log("=== PROXY POST START ===");
-      console.log("Initial GAS URL:", GAS_URL);
-      console.log("Body length (bytes):", rawBody.length);
-      console.log("Body prefix (first 200 chars):", bodyStr.substring(0, 200));
-
-      // Follow redirects manually, keeping POST at every hop
+      // Follow redirects manually, re-POSTing at each hop
       let currentUrl = GAS_URL;
       let response;
-      let hop = 0;
+      const trail = []; // one entry per hop: {url, status, location}
 
-      while (hop < 5) {
-        hop++;
-        const reqHeaders = { "Content-Type": "application/json" };
-        console.log(`--- Hop ${hop}: POST ${currentUrl}`);
-        console.log(`--- Hop ${hop}: sending headers:`, JSON.stringify(reqHeaders));
-
+      for (let hop = 0; hop < 6; hop++) {
         response = await fetch(currentUrl, {
           method: "POST",
-          headers: reqHeaders,
+          headers: { "Content-Type": "application/json" },
           body: rawBody,
           redirect: "manual",
         });
 
-        console.log(`--- Hop ${hop}: response status:`, response.status);
-        console.log(`--- Hop ${hop}: response headers:`, JSON.stringify(Object.fromEntries(response.headers.entries())));
+        const location = response.headers.get("location") || "";
+        trail.push({ hop: hop + 1, url: currentUrl, status: response.status, location });
 
-        if (response.status >= 300 && response.status < 400) {
-          const location = response.headers.get("location");
-          console.log(`--- Hop ${hop}: redirecting to:`, location);
-          if (!location) break;
+        if (response.status >= 300 && response.status < 400 && location) {
           currentUrl = location;
         } else {
-          break; // non-redirect — this is the final response
+          break;
         }
       }
 
       const text = await response.text();
-      console.log("=== FINAL response status:", response.status);
-      console.log("=== FINAL response body (first 600 chars):", text.substring(0, 600));
-      console.log("=== PROXY POST END ===");
+
+      // Single-line summary — always visible in Vercel logs regardless of truncation
+      console.log("PROXY|hops=" + trail.length
+        + "|final_status=" + response.status
+        + "|body_prefix=" + text.replace(/\s+/g, " ").substring(0, 200));
+
+      // Full hop trail on one line each
+      trail.forEach(t =>
+        console.log("HOP|" + t.hop + "|status=" + t.status + "|url=" + t.url + "|location=" + t.location)
+      );
 
       return res.status(200).send(text);
     }
 
     return res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
-    console.error("[proxy] request failed:", err.message, err.stack);
+    console.error("PROXY_ERROR|" + err.message + "|" + err.stack);
     return res.status(500).json({ error: err.message });
   }
 }
