@@ -55,7 +55,9 @@ const FINANCIAL_YEARS = [
 
 const MONTHLY_TARGET = 50000;
 const DEFAULT_OWNERS = ["David", "Jordan", "Jess", "Penni", "PP", "David / PP", "Jordan/PP", "Jordan/David", "Jess/PP", "David / Jordan"];
-const SHEET_URL = "https://script.google.com/macros/s/AKfycbx43ILL71R_N4G-6wsq2wXDtHau_ky1Ei78Xfu1TLcQpvWv8OPSX9lDCkBgKm_ckIFp/exec";
+// All requests go through /api/proxy (Vercel serverless) to avoid CORS.
+// The proxy forwards to Google Apps Script server-side where CORS doesn't apply.
+const SHEET_URL = "/api/proxy";
 
 const REAL_DATA = [
   { id: 1,  client:"ANS",                  event:"Amplify",                          ref:"124", date:"2026-03-05", venue:"Office",               assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
