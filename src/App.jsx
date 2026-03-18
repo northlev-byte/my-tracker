@@ -1716,12 +1716,14 @@ function EventTracker() {
   
 
   // File handling — upload to Google Drive via Apps Script, store URL
+  const [fileUploadError, setFileUploadError] = useState(null);
+
   async function handleFileUpload(leadId, e) {
     const files = Array.from(e.target.files);
     e.target.value = "";
+    setFileUploadError(null);
     for (const file of files) {
       const tempId = Date.now() + Math.random();
-      // Add placeholder showing upload in progress
       setLeads(l => l.map(x => x.id === leadId
         ? { ...x, files: [...(x.files||[]), { id: tempId, name: file.name, size: file.size, uploading: true }] }
         : x
@@ -1737,18 +1739,28 @@ function EventTracker() {
           method: "POST",
           body: JSON.stringify({ action: "uploadFile", fileName: file.name, mimeType: file.type || "application/octet-stream", fileData: base64 }),
         });
-        const result = await resp.json();
-        if (!result.driveUrl) throw new Error("No URL returned");
+        // Read as text first — resp.json() throws silently on non-JSON responses (HTML errors, "ok", etc.)
+        const text = await resp.text();
+        // Detect: old script (not yet updated) returns plain "ok"
+        if (text.trim() === "ok") throw new Error("Apps Script not updated — it returned 'ok' instead of a Drive URL. Update your Apps Script and re-deploy (see setup instructions below).");
+        // Detect: GAS returned an HTML error page (script threw, e.g. Drive not authorised)
+        if (text.trim().startsWith("<")) throw new Error("Apps Script threw an error (received HTML response). Most likely cause: DriveApp is not yet authorised. Open your Apps Script editor, run any function that uses DriveApp once to trigger the OAuth prompt, then re-deploy.");
+        let result;
+        try { result = JSON.parse(text); }
+        catch { throw new Error(`Apps Script returned unexpected response: ${text.substring(0, 120)}`); }
+        if (result.error) throw new Error(`Drive error from script: ${result.error}`);
+        if (!result.driveUrl) throw new Error(`Script responded but no driveUrl in payload: ${JSON.stringify(result)}`);
         setLeads(l => l.map(x => x.id === leadId
           ? { ...x, files: (x.files||[]).map(f => f.id === tempId ? { id: tempId, name: file.name, size: file.size, type: file.type, driveUrl: result.driveUrl } : f) }
           : x
         ));
-      } catch {
+      } catch (err) {
+        console.error("File upload failed:", err);
         setLeads(l => l.map(x => x.id === leadId
           ? { ...x, files: (x.files||[]).filter(f => f.id !== tempId) }
           : x
         ));
-        alert(`Failed to upload "${file.name}".\n\nMake sure your Apps Script has been updated with the file upload handler. See the instructions in the Files panel.`);
+        setFileUploadError(err.message);
       }
     }
   }
@@ -2167,15 +2179,27 @@ function EventTracker() {
       </div>
       {/* Files Modal */}
       {showFiles&&activeLead&&(
-        <div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowFiles(null)}>
+        <div className="overlay" onClick={e=>e.target===e.currentTarget&&{ setShowFiles(null); setFileUploadError(null); }}>
           <div className="modal" style={{width:500}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
               <div>
                 <h2 style={{margin:0,fontSize:17,fontWeight:700,color:"#111827"}}>📎 Files</h2>
                 <div style={{fontSize:13,color:"#6b7280",marginTop:2}}>{activeLead.client} — {activeLead.event}</div>
               </div>
-              <button onClick={()=>setShowFiles(null)} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#9ca3af",lineHeight:1}}>×</button>
+              <button onClick={()=>{ setShowFiles(null); setFileUploadError(null); }} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#9ca3af",lineHeight:1}}>×</button>
             </div>
+
+            {/* Upload error banner */}
+            {fileUploadError && (
+              <div style={{background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",gap:10,alignItems:"flex-start"}}>
+                <span style={{fontSize:16,flexShrink:0}}>⚠️</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"#b91c1c",marginBottom:3}}>Upload failed</div>
+                  <div style={{fontSize:12,color:"#991b1b",lineHeight:1.5}}>{fileUploadError}</div>
+                </div>
+                <button onClick={()=>setFileUploadError(null)} style={{background:"none",border:"none",color:"#fca5a5",fontSize:18,cursor:"pointer",lineHeight:1,flexShrink:0}}>×</button>
+              </div>
+            )}
 
             {/* Upload area */}
             <input ref={fileInputRef} type="file" multiple style={{display:"none"}} onChange={e=>handleFileUpload(activeLead.id,e)}/>
@@ -2250,7 +2274,7 @@ function EventTracker() {
             </details>
 
             <div style={{marginTop:20,textAlign:"right"}}>
-              <button className="btn-ghost" onClick={()=>setShowFiles(null)}>Done</button>
+              <button className="btn-ghost" onClick={()=>{ setShowFiles(null); setFileUploadError(null); }}>Done</button>
             </div>
           </div>
         </div>
