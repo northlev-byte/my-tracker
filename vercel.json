@@ -1,0 +1,8 @@
+{
+  "framework": "vite",
+  "functions": {
+    "api/proxy.js": {
+      "maxDuration": 30
+    }
+  }
+}
