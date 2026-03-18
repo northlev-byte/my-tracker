@@ -657,6 +657,8 @@ function ProspectsTab({ prospects, setProspects, owners, leads, setLeads, setAct
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState({});
   const [convertSuccess, setConvertSuccess] = useState(false);
+  const [addingLog, setAddingLog] = useState(false);
+  const [logForm, setLogForm] = useState({ date: "", note: "" });
 
   const individualOwners = (owners || DEFAULT_OWNERS).filter(o => !/[/&]/.test(o));
 
@@ -678,6 +680,7 @@ function ProspectsTab({ prospects, setProspects, owners, leads, setLeads, setAct
       clientName: form.clientName.trim(),
       clientEmail: form.clientEmail.trim(),
       createdAt: new Date().toISOString().split("T")[0],
+      log: [],
     }]);
     setAddingFor(null);
   }
@@ -686,12 +689,33 @@ function ProspectsTab({ prospects, setProspects, owners, leads, setLeads, setAct
     setSelectedProspect(p);
     setEditing(false);
     setConvertSuccess(false);
+    setAddingLog(false);
+    setLogForm({ date: new Date().toISOString().split("T")[0], note: "" });
   }
 
   function closeDetail() {
     setSelectedProspect(null);
     setEditing(false);
     setConvertSuccess(false);
+    setAddingLog(false);
+  }
+
+  function addLogEntry(prospectId) {
+    if (!logForm.date || !logForm.note.trim()) return;
+    const entry = { id: Date.now(), date: logForm.date, note: logForm.note.trim() };
+    setProspects(ps => ps.map(x => x.id === prospectId
+      ? { ...x, log: [...(x.log || []), entry] }
+      : x
+    ));
+    setLogForm({ date: new Date().toISOString().split("T")[0], note: "" });
+    setAddingLog(false);
+  }
+
+  function deleteLogEntry(prospectId, entryId) {
+    setProspects(ps => ps.map(x => x.id === prospectId
+      ? { ...x, log: (x.log || []).filter(e => e.id !== entryId) }
+      : x
+    ));
   }
 
   function startEdit() {
@@ -952,6 +976,82 @@ function ProspectsTab({ prospects, setProspects, owners, leads, setLeads, setAct
                     <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.6, background: "#f9fafb", borderRadius: 8, padding: "12px 14px", border: "1px solid #f3f4f6", whiteSpace: "pre-wrap" }}>{p.notes}</div>
                   ) : (
                     <div style={{ fontSize: 13, color: "#d1d5db", fontStyle: "italic", padding: "12px 0" }}>No notes added yet.</div>
+                  )}
+
+                  {/* Contact Log */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 20, marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".07em" }}>Contact Log</div>
+                    {!addingLog && (
+                      <button onClick={() => setAddingLog(true)}
+                        style={{ background: `${pc.dot}15`, border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: pc.text, cursor: "pointer", fontFamily: "inherit" }}>
+                        + Log Interaction
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Add log entry form */}
+                  {addingLog && (
+                    <div style={{ background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                        <div style={{ flex: "0 0 auto" }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>Date</div>
+                          <input type="date" className="form-input" value={logForm.date}
+                            onChange={e => setLogForm(f => ({ ...f, date: e.target.value }))}
+                            style={{ fontSize: 13, width: 150 }} />
+                        </div>
+                      </div>
+                      <textarea className="form-input" value={logForm.note}
+                        onChange={e => setLogForm(f => ({ ...f, note: e.target.value }))}
+                        placeholder="What was discussed…" rows={2}
+                        style={{ fontSize: 13, resize: "vertical", marginBottom: 8 }} autoFocus />
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => addLogEntry(p.id)}
+                          style={{ background: pc.dot, color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                          Save
+                        </button>
+                        <button onClick={() => setAddingLog(false)}
+                          style={{ background: "transparent", border: "none", color: "#6b7280", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Log timeline */}
+                  {(p.log || []).length === 0 && !addingLog ? (
+                    <div style={{ fontSize: 13, color: "#d1d5db", fontStyle: "italic", paddingBottom: 4 }}>No interactions logged yet.</div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                      {[...(p.log || [])].sort((a, b) => b.date.localeCompare(a.date)).map((entry, i, arr) => {
+                        const d = new Date(entry.date + "T00:00:00");
+                        const dayName = d.toLocaleDateString("en-GB", { weekday: "short" });
+                        const dayNum = d.getDate();
+                        const month = d.toLocaleDateString("en-GB", { month: "short" });
+                        const year = d.getFullYear();
+                        const isLast = i === arr.length - 1;
+                        return (
+                          <div key={entry.id} style={{ display: "flex", gap: 12, position: "relative" }}>
+                            {/* Timeline spine */}
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0, width: 32 }}>
+                              <div style={{ width: 10, height: 10, borderRadius: "50%", background: pc.dot, flexShrink: 0, marginTop: 14, zIndex: 1 }} />
+                              {!isLast && <div style={{ width: 2, flex: 1, background: `${pc.dot}30`, minHeight: 12 }} />}
+                            </div>
+                            {/* Entry content */}
+                            <div style={{ flex: 1, paddingBottom: isLast ? 0 : 12 }}>
+                              <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 10 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: pc.text }}>{dayName} {dayNum} {month} {year}</span>
+                                <button onClick={() => deleteLogEntry(p.id, entry.id)}
+                                  style={{ background: "none", border: "none", color: "#d1d5db", fontSize: 11, cursor: "pointer", padding: "0 2px", fontFamily: "inherit", lineHeight: 1 }}
+                                  title="Delete entry">×</button>
+                              </div>
+                              <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.55, marginTop: 3, background: "#f9fafb", borderRadius: 6, padding: "8px 10px", border: "1px solid #f3f4f6", whiteSpace: "pre-wrap" }}>
+                                {entry.note}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               )}
@@ -1511,11 +1611,13 @@ function EventTracker() {
           setLeads(REAL_DATA);
         }
         setOwners(Array.isArray(data.owners)&&data.owners.length>0 ? data.owners : DEFAULT_OWNERS);
-        setProspects(Array.isArray(data.prospects) ? data.prospects : []);
+        // Use Sheet prospects if present, otherwise fall back to localStorage
+        const sheetProspects = Array.isArray(data.prospects) && data.prospects.length > 0 ? data.prospects : null;
+        setProspects(sheetProspects ?? JSON.parse(localStorage.getItem("connectin_prospects") || "[]"));
       } catch {
         setLeads(REAL_DATA);
         setOwners(DEFAULT_OWNERS);
-        setProspects([]);
+        setProspects(JSON.parse(localStorage.getItem("connectin_prospects") || "[]"));
       } finally {
         // Mark load as complete — now saves are allowed
         loadedRef.current = true;
@@ -1523,6 +1625,12 @@ function EventTracker() {
     }
     load();
   },[]);
+
+  // Mirror prospects to localStorage immediately on every change — ensures they persist
+  // even if the Google Apps Script backend doesn't store the prospects field
+  useEffect(()=>{
+    if(prospects!==null) localStorage.setItem("connectin_prospects", JSON.stringify(prospects));
+  },[prospects]);
 
   // Save to Google Sheets (debounced) — only fires AFTER initial load is done
   useEffect(()=>{
