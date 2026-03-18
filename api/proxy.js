@@ -46,15 +46,18 @@ export default async function handler(req, res) {
       const trail = []; // one entry per hop: {url, status, location}
 
       for (let hop = 0; hop < 6; hop++) {
+        // Hop 1: POST the payload to the /exec URL.
+        // Subsequent hops: GET the redirect URL (GAS echo endpoint only accepts GET).
+        const isFirstHop = hop === 0;
         response = await fetch(currentUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: rawBody,
+          method: isFirstHop ? "POST" : "GET",
+          headers: isFirstHop ? { "Content-Type": "application/json" } : {},
+          body: isFirstHop ? rawBody : undefined,
           redirect: "manual",
         });
 
         const location = response.headers.get("location") || "";
-        trail.push({ hop: hop + 1, url: currentUrl, status: response.status, location });
+        trail.push({ hop: hop + 1, method: isFirstHop ? "POST" : "GET", url: currentUrl, status: response.status, location });
 
         if (response.status >= 300 && response.status < 400 && location) {
           currentUrl = location;
