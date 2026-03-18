@@ -650,18 +650,19 @@ function HolidaysTab({ fy }) {
 }
 
 // ── Prospects Tab ─────────────────────────────────────────
-function ProspectsTab({ prospects, setProspects, owners }) {
+function ProspectsTab({ prospects, setProspects, owners, leads, setLeads, setActiveTab }) {
   const [addingFor, setAddingFor] = useState(null);
-  const [form, setForm] = useState({ type: "Client", name: "", notes: "" });
-  const [selectedProspect, setSelectedProspect] = useState(null); // detail modal
+  const [form, setForm] = useState({ type: "Client", name: "", notes: "", details: "", phone: "", clientName: "", clientEmail: "" });
+  const [selectedProspect, setSelectedProspect] = useState(null);
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState({});
+  const [convertSuccess, setConvertSuccess] = useState(false);
 
   const individualOwners = (owners || DEFAULT_OWNERS).filter(o => !/[/&]/.test(o));
 
   function startAdd(owner) {
     setAddingFor(owner);
-    setForm({ type: "Client", name: "", notes: "" });
+    setForm({ type: "Client", name: "", notes: "", details: "", phone: "", clientName: "", clientEmail: "" });
   }
 
   function saveProspect() {
@@ -672,6 +673,10 @@ function ProspectsTab({ prospects, setProspects, owners }) {
       type: form.type,
       name: form.name.trim(),
       notes: form.notes.trim(),
+      details: form.details.trim(),
+      phone: form.phone.trim(),
+      clientName: form.clientName.trim(),
+      clientEmail: form.clientEmail.trim(),
       createdAt: new Date().toISOString().split("T")[0],
     }]);
     setAddingFor(null);
@@ -680,15 +685,25 @@ function ProspectsTab({ prospects, setProspects, owners }) {
   function openDetail(p) {
     setSelectedProspect(p);
     setEditing(false);
+    setConvertSuccess(false);
   }
 
   function closeDetail() {
     setSelectedProspect(null);
     setEditing(false);
+    setConvertSuccess(false);
   }
 
   function startEdit() {
-    setEditDraft({ type: selectedProspect.type, name: selectedProspect.name, notes: selectedProspect.notes || "" });
+    setEditDraft({
+      type: selectedProspect.type,
+      name: selectedProspect.name,
+      notes: selectedProspect.notes || "",
+      details: selectedProspect.details || "",
+      phone: selectedProspect.phone || "",
+      clientName: selectedProspect.clientName || "",
+      clientEmail: selectedProspect.clientEmail || "",
+    });
     setEditing(true);
   }
 
@@ -703,6 +718,29 @@ function ProspectsTab({ prospects, setProspects, owners }) {
   function deleteProspect(id) {
     setProspects(p => p.filter(x => x.id !== id));
     closeDetail();
+  }
+
+  function convertToLead(p) {
+    const maxId = (leads || []).reduce((mx, x) => Math.max(mx, Number(x.id) || 0), 0);
+    const newLead = {
+      id: maxId + 1,
+      client: p.type === "Client" ? p.name : (p.clientName || ""),
+      event: "",
+      ref: "",
+      date: "",
+      venue: p.type === "Venue" ? p.name : "",
+      assignee: p.assignee,
+      stage: "Proposal",
+      name: p.clientName || "",
+      company: p.type === "Client" ? p.name : "",
+      email: p.clientEmail || "",
+      value: "",
+      notes: p.notes || "",
+      files: [],
+      classCode: "",
+    };
+    setLeads(l => [...(l || []), newLead]);
+    setConvertSuccess(true);
   }
 
   // Keep selectedProspect in sync if prospects array changes
@@ -743,7 +781,7 @@ function ProspectsTab({ prospects, setProspects, owners }) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: pc.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
                     <div style={{ fontSize: 11, color: pc.text, opacity: .5, marginTop: 1 }}>
-                      {p.notes ? p.notes.substring(0, 40) + (p.notes.length > 40 ? "…" : "") : p.type + " · " + p.createdAt}
+                      {p.clientName ? p.clientName + (p.phone ? " · " + p.phone : "") : (p.notes ? p.notes.substring(0, 40) + (p.notes.length > 40 ? "…" : "") : p.type + " · " + p.createdAt)}
                     </div>
                   </div>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={pc.dot} strokeWidth="2.5" style={{ flexShrink: 0, opacity: .4 }}><path d="m9 18 6-6-6-6"/></svg>
@@ -762,7 +800,15 @@ function ProspectsTab({ prospects, setProspects, owners }) {
                     ))}
                   </div>
                   <input className="form-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder={`${form.type} name…`} style={{ marginBottom: 6, fontSize: 13 }} autoFocus />
+                    placeholder={form.type === "Venue" ? "Venue name…" : "Company / client name…"} style={{ marginBottom: 6, fontSize: 13 }} autoFocus />
+                  <input className="form-input" value={form.clientName} onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))}
+                    placeholder="Contact name…" style={{ marginBottom: 6, fontSize: 13 }} />
+                  <input className="form-input" value={form.clientEmail} onChange={e => setForm(f => ({ ...f, clientEmail: e.target.value }))}
+                    placeholder="Contact email…" style={{ marginBottom: 6, fontSize: 13 }} type="email" />
+                  <input className="form-input" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                    placeholder="Phone number…" style={{ marginBottom: 6, fontSize: 13 }} />
+                  <input className="form-input" value={form.details} onChange={e => setForm(f => ({ ...f, details: e.target.value }))}
+                    placeholder="Website / details link…" style={{ marginBottom: 6, fontSize: 13 }} />
                   <textarea className="form-input" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                     placeholder="Notes (optional)…" rows={2} style={{ marginBottom: 8, fontSize: 12, resize: "vertical" }} />
                   <div style={{ display: "flex", gap: 6 }}>
@@ -795,7 +841,7 @@ function ProspectsTab({ prospects, setProspects, owners }) {
         const pc = PERSON_COLORS[p.assignee] || { bg: "#f9fafb", border: "#e5e7eb", text: "#374151", dot: "#6b7280" };
         return (
           <div className="overlay" onClick={e => e.target === e.currentTarget && closeDetail()}>
-            <div className="modal" style={{ width: 480 }}>
+            <div className="modal" style={{ width: 520 }}>
               {/* Modal header */}
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -821,7 +867,21 @@ function ProspectsTab({ prospects, setProspects, owners }) {
                 </div>
               </div>
 
-              {/* Notes section */}
+              {/* Pipeline conversion success banner */}
+              {convertSuccess && (
+                <div style={{ background: "#dcfce7", border: "1.5px solid #86efac", borderRadius: 8, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 16 }}>✅</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#15803d" }}>Added to Pipeline as Proposal</div>
+                    <button onClick={() => { closeDetail(); setActiveTab("events"); }}
+                      style={{ background: "none", border: "none", color: "#15803d", fontWeight: 700, fontSize: 12, cursor: "pointer", padding: 0, textDecoration: "underline", fontFamily: "inherit", marginTop: 2 }}>
+                      Go to Events & Pipeline →
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Edit / View fields */}
               {editing ? (
                 <div>
                   <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
@@ -835,12 +895,58 @@ function ProspectsTab({ prospects, setProspects, owners }) {
                   <label className="form-label">Name</label>
                   <input className="form-input" value={editDraft.name} onChange={e => setEditDraft(d => ({ ...d, name: e.target.value }))}
                     style={{ marginBottom: 10 }} autoFocus />
+                  <label className="form-label">Contact Name</label>
+                  <input className="form-input" value={editDraft.clientName} onChange={e => setEditDraft(d => ({ ...d, clientName: e.target.value }))}
+                    style={{ marginBottom: 10 }} placeholder="Contact person name…" />
+                  <label className="form-label">Contact Email</label>
+                  <input className="form-input" value={editDraft.clientEmail} onChange={e => setEditDraft(d => ({ ...d, clientEmail: e.target.value }))}
+                    style={{ marginBottom: 10 }} placeholder="Email address…" type="email" />
+                  <label className="form-label">Phone Number</label>
+                  <input className="form-input" value={editDraft.phone} onChange={e => setEditDraft(d => ({ ...d, phone: e.target.value }))}
+                    style={{ marginBottom: 10 }} placeholder="Phone number…" />
+                  <label className="form-label">Website / Details Link</label>
+                  <input className="form-input" value={editDraft.details} onChange={e => setEditDraft(d => ({ ...d, details: e.target.value }))}
+                    style={{ marginBottom: 10 }} placeholder="https://…" />
                   <label className="form-label">Notes</label>
                   <textarea className="form-input" value={editDraft.notes} onChange={e => setEditDraft(d => ({ ...d, notes: e.target.value }))}
-                    rows={4} style={{ resize: "vertical" }} placeholder="Add notes…" />
+                    rows={3} style={{ resize: "vertical" }} placeholder="Add notes…" />
                 </div>
               ) : (
                 <div>
+                  {/* Contact details grid */}
+                  {(p.clientName || p.clientEmail || p.phone || p.details) && (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+                      {p.clientName && (
+                        <div style={{ background: "#f9fafb", borderRadius: 8, padding: "10px 12px", border: "1px solid #f3f4f6" }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 4 }}>Contact</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{p.clientName}</div>
+                        </div>
+                      )}
+                      {p.clientEmail && (
+                        <div style={{ background: "#f9fafb", borderRadius: 8, padding: "10px 12px", border: "1px solid #f3f4f6" }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 4 }}>Email</div>
+                          <a href={`mailto:${p.clientEmail}`} style={{ fontSize: 13, fontWeight: 600, color: "#3b82f6", textDecoration: "none" }}>{p.clientEmail}</a>
+                        </div>
+                      )}
+                      {p.phone && (
+                        <div style={{ background: "#f9fafb", borderRadius: 8, padding: "10px 12px", border: "1px solid #f3f4f6" }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 4 }}>Phone</div>
+                          <a href={`tel:${p.phone}`} style={{ fontSize: 13, fontWeight: 600, color: "#374151", textDecoration: "none" }}>{p.phone}</a>
+                        </div>
+                      )}
+                      {p.details && (
+                        <div style={{ background: "#f9fafb", borderRadius: 8, padding: "10px 12px", border: "1px solid #f3f4f6", overflow: "hidden" }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 4 }}>Website / Link</div>
+                          <a href={p.details.startsWith("http") ? p.details : "https://" + p.details} target="_blank" rel="noopener noreferrer"
+                            style={{ fontSize: 13, fontWeight: 600, color: "#3b82f6", textDecoration: "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
+                            {p.details.replace(/^https?:\/\//, "")}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Notes */}
                   <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 8 }}>Notes</div>
                   {p.notes ? (
                     <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.6, background: "#f9fafb", borderRadius: 8, padding: "12px 14px", border: "1px solid #f3f4f6", whiteSpace: "pre-wrap" }}>{p.notes}</div>
@@ -851,11 +957,18 @@ function ProspectsTab({ prospects, setProspects, owners }) {
               )}
 
               {/* Actions */}
-              <div style={{ display: "flex", gap: 8, marginTop: 22, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 22, alignItems: "center", flexWrap: "wrap" }}>
                 <button onClick={() => deleteProspect(p.id)}
                   style={{ background: "transparent", border: "none", color: "#ef4444", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "8px 4px", fontFamily: "inherit" }}>
                   Delete
                 </button>
+                {!editing && !convertSuccess && (
+                  <button onClick={() => convertToLead(p)}
+                    style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 7, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                    Send to Pipeline
+                  </button>
+                )}
                 <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
                   {editing ? (
                     <>
@@ -1589,7 +1702,7 @@ function EventTracker() {
         </div>
 
         {activeTab==="holidays"&&<HolidaysTab fy={activeFY}/>}
-        {activeTab==="prospects"&&<ProspectsTab prospects={prospects} setProspects={setProspects} owners={owners}/>}
+        {activeTab==="prospects"&&<ProspectsTab prospects={prospects} setProspects={setProspects} owners={owners} leads={leads} setLeads={setLeads} setActiveTab={setActiveTab}/>}
         {activeTab==="hubspot"&&<HubSpotTab leads={leads} setLeads={setLeads} owners={owners}/>}
 
         {activeTab==="lost"&&(
