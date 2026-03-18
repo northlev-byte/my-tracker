@@ -1661,9 +1661,11 @@ function EventTracker() {
             .filter(f => !f.uploading)
             .map(f => ({ id: f.id, name: f.name, size: f.size, type: f.type || "", driveUrl: f.driveUrl || null })),
         }));
-        // Safety check — never save fewer leads than Sheets currently holds
-        if (sheetLeadCountRef.current > 0 && leadsToSave.length < sheetLeadCountRef.current) {
-          console.warn(`[save] blocked: would write ${leadsToSave.length} leads but Sheets has ${sheetLeadCountRef.current}`);
+        // Safety check — block saves that drop the lead count by more than 5 at once
+        // (catches accidental bulk overwrites while allowing normal single deletions)
+        const drop = sheetLeadCountRef.current - leadsToSave.length;
+        if (sheetLeadCountRef.current > 0 && drop > 5) {
+          console.warn(`[save] blocked: would drop from ${sheetLeadCountRef.current} to ${leadsToSave.length} leads`);
           setSaveError(true);
           return;
         }
