@@ -1597,44 +1597,26 @@ function EventTracker() {
       try {
         const res = await fetch(SHEET_URL);
         const data = await res.json();
-        // Only use Sheet data if it has actual rows — never merge with REAL_DATA
+        // Sheets is the single source of truth — use it directly, overwrite localStorage
         if (Array.isArray(data.leads) && data.leads.length > 0) {
-          // Deduplicate by id just in case Sheet ever got duplicates
           const seen = new Set();
-          const deduped = data.leads
+          const sheetLeads = data.leads
             .map(l=>({...l, files:l.files||[], classCode:l.classCode||""}))
             .filter(l=>{ if(seen.has(String(l.id))) return false; seen.add(String(l.id)); return true; });
-          const sheetIds = new Set(deduped.map(l=>String(l.id)));
-          // Preserve localStorage entries not yet in Sheets (written during failed-save windows)
-          const cached = localStorage.getItem("connectin_leads");
-          const localLeads = cached ? JSON.parse(cached) : [];
-          const localIds = new Set(localLeads.map(l=>String(l.id)));
-          const localOnly = localLeads.filter(l=>!sheetIds.has(String(l.id)));
-          // Only add REAL_DATA entries missing from BOTH Sheets and localStorage
-          const realOnly = REAL_DATA.filter(l=>!sheetIds.has(String(l.id))&&!localIds.has(String(l.id)));
-          // Final dedup by id as a safety net (first occurrence wins)
-          const finalSeen = new Set();
-          const merged = [...deduped, ...localOnly, ...realOnly].filter(l=>{
-            if(finalSeen.has(String(l.id))) return false; finalSeen.add(String(l.id)); return true;
-          });
-          setLeads(merged);
-          // Keep localStorage in sync with the authoritative Sheet data
-          localStorage.setItem("connectin_leads", JSON.stringify(merged));
+          setLeads(sheetLeads);
+          localStorage.setItem("connectin_leads", JSON.stringify(sheetLeads));
         } else {
-          // Sheet is empty — try localStorage first, then fall back to REAL_DATA
+          // Sheets empty — fall back to localStorage, then hardcoded seed data
           const cached = localStorage.getItem("connectin_leads");
-          const fallback = cached ? JSON.parse(cached) : REAL_DATA;
-          setLeads(fallback);
+          setLeads(cached ? JSON.parse(cached) : REAL_DATA);
         }
         setOwners(Array.isArray(data.owners)&&data.owners.length>0 ? data.owners : DEFAULT_OWNERS);
-        // Use Sheet prospects if present, merging any localStorage-only entries not yet saved
-        const cachedProspects = JSON.parse(localStorage.getItem("connectin_prospects") || "[]");
+        // Sheets is source of truth for prospects too
         if (Array.isArray(data.prospects) && data.prospects.length > 0) {
-          const sheetPIds = new Set(data.prospects.map(p=>String(p.id)));
-          const localOnlyProspects = cachedProspects.filter(p=>!sheetPIds.has(String(p.id)));
-          setProspects([...data.prospects, ...localOnlyProspects]);
+          setProspects(data.prospects);
+          localStorage.setItem("connectin_prospects", JSON.stringify(data.prospects));
         } else {
-          setProspects(cachedProspects);
+          setProspects(JSON.parse(localStorage.getItem("connectin_prospects") || "[]"));
         }
       } catch {
         // Sheet unreachable — restore from localStorage so user data isn't lost
