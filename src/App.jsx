@@ -1605,17 +1605,24 @@ function EventTracker() {
           // Merge in any new events from REAL_DATA that aren't in the Sheet yet (by id)
           const sheetIds = new Set(deduped.map(l=>String(l.id)));
           const newEntries = REAL_DATA.filter(l=>!sheetIds.has(String(l.id)));
-          setLeads([...deduped, ...newEntries]);
+          const merged = [...deduped, ...newEntries];
+          setLeads(merged);
+          // Keep localStorage in sync with the authoritative Sheet data
+          localStorage.setItem("connectin_leads", JSON.stringify(merged));
         } else {
-          // Sheet is empty — seed with defaults once
-          setLeads(REAL_DATA);
+          // Sheet is empty — try localStorage first, then fall back to REAL_DATA
+          const cached = localStorage.getItem("connectin_leads");
+          const fallback = cached ? JSON.parse(cached) : REAL_DATA;
+          setLeads(fallback);
         }
         setOwners(Array.isArray(data.owners)&&data.owners.length>0 ? data.owners : DEFAULT_OWNERS);
         // Use Sheet prospects if present, otherwise fall back to localStorage
         const sheetProspects = Array.isArray(data.prospects) && data.prospects.length > 0 ? data.prospects : null;
         setProspects(sheetProspects ?? JSON.parse(localStorage.getItem("connectin_prospects") || "[]"));
       } catch {
-        setLeads(REAL_DATA);
+        // Sheet unreachable — restore from localStorage so user data isn't lost
+        const cachedLeads = localStorage.getItem("connectin_leads");
+        setLeads(cachedLeads ? JSON.parse(cachedLeads) : REAL_DATA);
         setOwners(DEFAULT_OWNERS);
         setProspects(JSON.parse(localStorage.getItem("connectin_prospects") || "[]"));
       } finally {
@@ -1626,8 +1633,11 @@ function EventTracker() {
     load();
   },[]);
 
-  // Mirror prospects to localStorage immediately on every change — ensures they persist
-  // even if the Google Apps Script backend doesn't store the prospects field
+  // Mirror leads & prospects to localStorage on every change — ensures data survives
+  // Sheet outages or Apps Script failures
+  useEffect(()=>{
+    if(leads!==null) localStorage.setItem("connectin_leads", JSON.stringify(leads));
+  },[leads]);
   useEffect(()=>{
     if(prospects!==null) localStorage.setItem("connectin_prospects", JSON.stringify(prospects));
   },[prospects]);
@@ -1757,22 +1767,49 @@ function EventTracker() {
         .fy-tab-active{background:#111827;color:#fff;border-color:#111827}
         .file-drop{border:2px dashed #e5e7eb;border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:all .15s}
         .file-drop:hover{border-color:#6366f1;background:#fafafe}
+
+        /* ── Layout ─────────────────────────────────────── */
+        .app-header-inner{max-width:1500px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:58px;gap:12px}
+        .app-header-right{display:flex;gap:8px;align-items:center;flex-shrink:0}
+        .app-main{max-width:1500px;margin:0 auto;padding:22px 24px}
+        .app-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;scrollbar-width:none}
+        .app-tabs::-webkit-scrollbar{display:none}
+        .kanban-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+
+        /* ── Mobile ─────────────────────────────────────── */
+        @media(max-width:768px){
+          .app-header-inner{height:auto;padding:10px 14px;flex-wrap:wrap;gap:8px}
+          .app-header-right{gap:6px}
+          .app-main{padding:14px 12px}
+          .save-badge{display:none}
+          .btn-label{display:none}
+          .fy-tab{padding:6px 10px;font-size:12px}
+          .btn-ghost,.btn-primary{padding:8px 10px}
+          .kanban-grid{grid-template-columns:repeat(3,minmax(220px,1fr));overflow-x:auto;-webkit-overflow-scrolling:touch}
+          .modal{padding:20px 16px !important}
+          .stat-card{padding:14px 16px}
+        }
+        @media(max-width:480px){
+          .app-header-inner{padding:10px 12px}
+          .app-main{padding:12px 10px}
+          .kanban-grid{grid-template-columns:repeat(6,minmax(200px,1fr));overflow-x:auto}
+          .app-tabs button{font-size:12px;padding:8px 10px}
+        }
       `}</style>
 
       {/* Header */}
-      <div style={{background:"#fff",borderBottom:"1.5px solid #e5e7eb",padding:"0 24px",position:"sticky",top:0,zIndex:50}}>
-        <div style={{maxWidth:1500,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",height:58}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:30,height:30,background:"#111827",borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"#fff",borderBottom:"1.5px solid #e5e7eb",position:"sticky",top:0,zIndex:50}}>
+        <div className="app-header-inner">
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+            <div style={{width:30,height:30,background:"#111827",borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
             </div>
-            <span style={{fontWeight:700,fontSize:16,color:"#111827",letterSpacing:"-.02em"}}>Event & Lead Tracker</span>
-            {saving&&<span style={{fontSize:11,color:"#f59e0b",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:999,padding:"2px 8px",fontWeight:600}}>⏳ Saving…</span>}
-            {!saving&&saveError&&<span style={{fontSize:11,color:"#ef4444",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:999,padding:"2px 8px",fontWeight:600}}>⚠️ Save failed</span>}
-            {!saving&&!saveError&&lastSaved&&<span style={{fontSize:11,color:"#22c55e",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:999,padding:"2px 8px",fontWeight:600}}>✓ Saved to Sheets</span>}
+            <span style={{fontWeight:700,fontSize:16,color:"#111827",letterSpacing:"-.02em",whiteSpace:"nowrap"}}>Event & Lead Tracker</span>
+            {saving&&<span style={{fontSize:11,color:"#f59e0b",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:999,padding:"2px 8px",fontWeight:600,whiteSpace:"nowrap"}}>⏳ Saving…</span>}
+            {!saving&&saveError&&<span style={{fontSize:11,color:"#ef4444",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:999,padding:"2px 8px",fontWeight:600,whiteSpace:"nowrap"}}>⚠️ Save failed</span>}
+            {!saving&&!saveError&&lastSaved&&<span className="save-badge" style={{fontSize:11,color:"#22c55e",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:999,padding:"2px 8px",fontWeight:600,whiteSpace:"nowrap"}}>✓ Saved</span>}
           </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {/* FY tabs */}
+          <div className="app-header-right">
             <div style={{display:"flex",gap:6}}>
               {FINANCIAL_YEARS.map(fy=>(
                 <button key={fy.id} className={`fy-tab${activeFY===fy.id?" fy-tab-active":""}`} onClick={()=>setActiveFY(fy.id)}>{fy.label}</button>
@@ -1780,20 +1817,19 @@ function EventTracker() {
             </div>
             <button className="btn-ghost" onClick={()=>setShowOwners(true)}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              Owners
+              <span className="btn-label">Owners</span>
             </button>
-
             <button className="btn-primary" onClick={openAdd}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
-              Add Entry
+              <span className="btn-label">Add Entry</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div style={{maxWidth:1500,margin:"0 auto",padding:"22px 24px"}}>
+      <div className="app-main">
         {/* Main tab navigation */}
-        <div style={{display:"flex",gap:6,marginBottom:20,borderBottom:"2px solid #e5e7eb",paddingBottom:0}}>
+        <div className="app-tabs" style={{display:"flex",gap:6,marginBottom:20,borderBottom:"2px solid #e5e7eb",paddingBottom:0}}>
           {[
             {id:"events",    label:"📅 Events & Pipeline", count:fyLeads.filter(l=>l.stage!=="Closed Lost").length},
             {id:"lost",      label:"❌ Closed Lost",        count:lostLeads.length},
@@ -1864,7 +1900,7 @@ function EventTracker() {
         {activeTab==="events"&&<>
 
         {/* Stats */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:14,marginBottom:22}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:14,marginBottom:22}}>
           {[
             {label:"Total Events",  value:fyLeads.length,                                                icon:"🗓️",color:"#111827",bg:"#fff"},
             {label:"Confirmed",     value:confirmedVal?`£${confirmedVal.toLocaleString()}`:"—",          icon:"✅",color:"#15803d",bg:"#f0fdf4"},
@@ -2050,7 +2086,7 @@ function EventTracker() {
 
         {/* Kanban */}
         {view==="kanban"&&(
-          <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:12}}>
+          <div className="kanban-grid">
             {STAGES.map(stage=>{
               const sc=STAGE_COLORS[stage];
               const stageLeads=filtered.filter(l=>l.stage===stage);
