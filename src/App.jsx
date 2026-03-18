@@ -1650,7 +1650,14 @@ function EventTracker() {
     saveTimer.current=setTimeout(async()=>{
       setSaving(true); setSaveError(false);
       try {
-        await fetch(SHEET_URL,{method:"POST",body:JSON.stringify({leads,owners,prospects})});
+        // Strip base64 data from files before saving — only keep Drive URLs (base64 is too large for Sheets cells)
+        const leadsToSave = leads.map(l => ({
+          ...l,
+          files: (l.files||[])
+            .filter(f => !f.uploading)
+            .map(f => ({ id: f.id, name: f.name, size: f.size, type: f.type || "", driveUrl: f.driveUrl || null })),
+        }));
+        await fetch(SHEET_URL,{method:"POST",body:JSON.stringify({leads:leadsToSave,owners,prospects})});
         setLastSaved(new Date());
       } catch { setSaveError(true); }
       finally { setSaving(false); }
@@ -1708,22 +1715,47 @@ function EventTracker() {
   
   
 
-  // File handling — store as base64 in the data
-  function handleFileUpload(leadId, e) {
+  // File handling — upload to Google Drive via Apps Script, store URL
+  async function handleFileUpload(leadId, e) {
     const files = Array.from(e.target.files);
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const fileObj = { id: Date.now()+Math.random(), name: file.name, size: file.size, type: file.type, data: ev.target.result };
-        setLeads(l=>l.map(x=>x.id===leadId?{...x,files:[...(x.files||[]),fileObj]}:x));
-      };
-      reader.readAsDataURL(file);
-    });
-    e.target.value="";
+    e.target.value = "";
+    for (const file of files) {
+      const tempId = Date.now() + Math.random();
+      // Add placeholder showing upload in progress
+      setLeads(l => l.map(x => x.id === leadId
+        ? { ...x, files: [...(x.files||[]), { id: tempId, name: file.name, size: file.size, uploading: true }] }
+        : x
+      ));
+      try {
+        const base64 = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = ev => res(ev.target.result);
+          r.onerror = rej;
+          r.readAsDataURL(file);
+        });
+        const resp = await fetch(SHEET_URL, {
+          method: "POST",
+          body: JSON.stringify({ action: "uploadFile", fileName: file.name, mimeType: file.type || "application/octet-stream", fileData: base64 }),
+        });
+        const result = await resp.json();
+        if (!result.driveUrl) throw new Error("No URL returned");
+        setLeads(l => l.map(x => x.id === leadId
+          ? { ...x, files: (x.files||[]).map(f => f.id === tempId ? { id: tempId, name: file.name, size: file.size, type: file.type, driveUrl: result.driveUrl } : f) }
+          : x
+        ));
+      } catch {
+        setLeads(l => l.map(x => x.id === leadId
+          ? { ...x, files: (x.files||[]).filter(f => f.id !== tempId) }
+          : x
+        ));
+        alert(`Failed to upload "${file.name}".\n\nMake sure your Apps Script has been updated with the file upload handler. See the instructions in the Files panel.`);
+      }
+    }
   }
   function removeFile(leadId, fileId) { setLeads(l=>l.map(x=>x.id===leadId?{...x,files:(x.files||[]).filter(f=>f.id!==fileId)}:x)); }
-  function downloadFile(file) {
-    const a=document.createElement('a'); a.href=file.data; a.download=file.name; a.click();
+  function openFile(file) {
+    if (file.driveUrl) { window.open(file.driveUrl, "_blank"); }
+    else if (file.data) { const a=document.createElement("a"); a.href=file.data; a.download=file.name; a.click(); }
   }
 
   const activeLead = showFiles ? (leads||[]).find(l=>l.id===showFiles) : null;
@@ -2148,9 +2180,9 @@ function EventTracker() {
             {/* Upload area */}
             <input ref={fileInputRef} type="file" multiple style={{display:"none"}} onChange={e=>handleFileUpload(activeLead.id,e)}/>
             <div className="file-drop" onClick={()=>fileInputRef.current?.click()} style={{marginBottom:16}}>
-              <div style={{fontSize:28,marginBottom:8}}>📁</div>
-              <div style={{fontSize:14,fontWeight:600,color:"#374151"}}>Click to upload files</div>
-              <div style={{fontSize:12,color:"#9ca3af",marginTop:4}}>Proposals, invoices, contracts, images — any file type</div>
+              <div style={{fontSize:28,marginBottom:8}}>☁️</div>
+              <div style={{fontSize:14,fontWeight:600,color:"#374151"}}>Click to upload to Google Drive</div>
+              <div style={{fontSize:12,color:"#9ca3af",marginTop:4}}>Files are stored in Drive and accessible to the whole team on any device</div>
             </div>
 
             {/* File list */}
@@ -2159,18 +2191,63 @@ function EventTracker() {
             ):(
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {(activeLead.files||[]).map(file=>(
-                  <div key={file.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#f9fafb",borderRadius:8,border:"1px solid #e5e7eb"}}>
-                    <span style={{fontSize:20}}>{fileIcon(file.name)}</span>
+                  <div key={file.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:file.uploading?"#fefce8":"#f9fafb",borderRadius:8,border:`1px solid ${file.uploading?"#fde68a":"#e5e7eb"}`}}>
+                    <span style={{fontSize:20}}>{file.uploading ? "⏳" : fileIcon(file.name)}</span>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:13,fontWeight:600,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{file.name}</div>
-                      <div style={{fontSize:11,color:"#9ca3af"}}>{(file.size/1024).toFixed(1)} KB</div>
+                      <div style={{fontSize:11,color:file.uploading?"#b45309":"#9ca3af"}}>{file.uploading ? "Uploading to Drive…" : `${(file.size/1024).toFixed(1)} KB · Saved in Google Drive`}</div>
                     </div>
-                    <button onClick={()=>downloadFile(file)} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 10px",fontSize:12,color:"#1d4ed8",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>Download</button>
-                    <button className="btn-danger" onClick={()=>removeFile(activeLead.id,file.id)}>✕</button>
+                    {!file.uploading && file.driveUrl && (
+                      <button onClick={()=>openFile(file)} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 10px",fontSize:12,color:"#1d4ed8",cursor:"pointer",fontWeight:600,fontFamily:"inherit",whiteSpace:"nowrap"}}>Open in Drive</button>
+                    )}
+                    {!file.uploading && !file.driveUrl && file.data && (
+                      <button onClick={()=>openFile(file)} style={{background:"#f3f4f6",border:"none",borderRadius:6,padding:"5px 10px",fontSize:12,color:"#374151",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>Download</button>
+                    )}
+                    {!file.uploading && (
+                      <button className="btn-danger" onClick={()=>removeFile(activeLead.id,file.id)}>✕</button>
+                    )}
                   </div>
                 ))}
               </div>
             )}
+
+            {/* Apps Script setup notice */}
+            <details style={{marginTop:16,borderTop:"1px solid #f3f4f6",paddingTop:14}}>
+              <summary style={{fontSize:12,color:"#9ca3af",cursor:"pointer",fontWeight:600,userSelect:"none"}}>⚙️ Setup required — click to see Apps Script instructions</summary>
+              <div style={{marginTop:10,background:"#f9fafb",borderRadius:8,padding:"12px 14px",fontSize:12,color:"#374151",lineHeight:1.7}}>
+                <div style={{fontWeight:700,marginBottom:6,color:"#111827"}}>Add this to your Google Apps Script to enable Drive uploads:</div>
+                <div style={{marginBottom:8,color:"#6b7280"}}>Go to <strong>script.google.com</strong> → open your Apps Script → paste the following functions, then re-deploy as a web app.</div>
+                <pre style={{background:"#111827",color:"#e5e7eb",borderRadius:6,padding:"10px 12px",fontSize:11,overflow:"auto",whiteSpace:"pre",margin:0}}>{`function doPost(e) {
+  var data = JSON.parse(e.postData.contents);
+  if (data.action === 'uploadFile') {
+    var folderName = 'ConnectIn Tracker Files';
+    var folders = DriveApp.getFoldersByName(folderName);
+    var folder = folders.hasNext()
+      ? folders.next()
+      : DriveApp.createFolder(folderName);
+    var base64 = data.fileData.replace(/^data:[^;]+;base64,/, '');
+    var bytes = Utilities.base64Decode(base64);
+    var blob = Utilities.newBlob(
+      bytes, data.mimeType || 'application/octet-stream', data.fileName);
+    var file = folder.createFile(blob);
+    file.setSharing(
+      DriveApp.Access.ANYONE_WITH_LINK,
+      DriveApp.Permission.VIEW);
+    var url = 'https://drive.google.com/file/d/'
+      + file.getId() + '/view?usp=sharing';
+    return ContentService
+      .createTextOutput(JSON.stringify({ driveUrl: url }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  // existing save logic below...
+  var sheet = SpreadsheetApp.getActiveSpreadsheet()
+    .getSheetByName('Data')
+    || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  sheet.getRange('A1').setValue(e.postData.contents);
+  return ContentService.createTextOutput('ok');
+}`}</pre>
+              </div>
+            </details>
 
             <div style={{marginTop:20,textAlign:"right"}}>
               <button className="btn-ghost" onClick={()=>setShowFiles(null)}>Done</button>
