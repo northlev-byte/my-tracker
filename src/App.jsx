@@ -1884,8 +1884,8 @@ function EventTracker() {
 
         /* ── Mobile ─────────────────────────────────────── */
         @media(max-width:768px){
-          .app-header-inner{height:auto;padding:10px 14px;flex-wrap:wrap;gap:8px}
-          .app-header-right{gap:6px;flex-wrap:wrap;justify-content:flex-end}
+          .app-header-inner{height:auto;padding:10px 14px;flex-wrap:wrap;gap:6px}
+          .app-header-right{gap:6px;flex-wrap:wrap;justify-content:flex-end;width:100%}
           .app-main{padding:14px 12px}
           .save-badge{display:none}
           .btn-label{display:none}
@@ -1902,8 +1902,8 @@ function EventTracker() {
           .controls-filters{width:100%;flex-wrap:wrap}
           .controls-filters select{flex:1;min-width:120px}
           .tab-btn{padding:8px 10px;font-size:13px}
-          .tab-label-full{display:none}
-          .tab-label-short{display:inline}
+          .tab-label-full{display:none !important}
+          .tab-label-short{display:inline !important}
           .view-switcher{align-self:flex-start}
           .app-header-title{font-size:14px !important}
         }
@@ -1911,7 +1911,7 @@ function EventTracker() {
           .app-header-inner{padding:8px 10px}
           .app-main{padding:10px 8px}
           .kanban-grid{grid-template-columns:repeat(6,minmax(180px,1fr));overflow-x:auto}
-          .tab-btn{padding:7px 8px;font-size:12px}
+          .tab-btn{padding:6px 8px;font-size:12px}
           .fy-tab{padding:4px 8px;font-size:11px}
         }
       `}</style>
@@ -1919,7 +1919,7 @@ function EventTracker() {
       {/* Header */}
       <div style={{background:"#fff",borderBottom:"1.5px solid #e5e7eb",position:"sticky",top:0,zIndex:50}}>
         <div className="app-header-inner">
-          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
             <div style={{width:30,height:30,background:"#111827",borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
             </div>
@@ -1959,7 +1959,7 @@ function EventTracker() {
             <button key={tab.id} className="tab-btn" onClick={()=>setActiveTab(tab.id)}
               style={{background:"none",border:"none",borderBottom:`3px solid ${activeTab===tab.id?"#111827":"transparent"}`,fontWeight:activeTab===tab.id?700:500,color:activeTab===tab.id?"#111827":"#6b7280",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6,marginBottom:-2,transition:"all .15s"}}>
               <span className="tab-label-full">{tab.label}</span>
-              <span className="tab-label-short" style={{display:"none"}}>{tab.short}</span>
+              <span className="tab-label-short">{tab.short}</span>
               {tab.count!==null&&<span style={{background:activeTab===tab.id?"#111827":"#f3f4f6",color:activeTab===tab.id?"#fff":"#6b7280",borderRadius:999,fontSize:11,fontWeight:700,padding:"1px 7px"}}>{tab.count}</span>}
             </button>
           ))}
