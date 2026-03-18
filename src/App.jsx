@@ -1607,7 +1607,11 @@ function EventTracker() {
           // Merge in any new events from REAL_DATA that aren't in the Sheet yet (by id)
           const sheetIds = new Set(deduped.map(l=>String(l.id)));
           const newEntries = REAL_DATA.filter(l=>!sheetIds.has(String(l.id)));
-          const merged = [...deduped, ...newEntries];
+          // Also preserve any localStorage entries not yet saved to Sheets (e.g. from failed saves)
+          const cached = localStorage.getItem("connectin_leads");
+          const localLeads = cached ? JSON.parse(cached) : [];
+          const localOnly = localLeads.filter(l=>!sheetIds.has(String(l.id)));
+          const merged = [...deduped, ...newEntries, ...localOnly];
           setLeads(merged);
           // Keep localStorage in sync with the authoritative Sheet data
           localStorage.setItem("connectin_leads", JSON.stringify(merged));
@@ -1618,9 +1622,15 @@ function EventTracker() {
           setLeads(fallback);
         }
         setOwners(Array.isArray(data.owners)&&data.owners.length>0 ? data.owners : DEFAULT_OWNERS);
-        // Use Sheet prospects if present, otherwise fall back to localStorage
-        const sheetProspects = Array.isArray(data.prospects) && data.prospects.length > 0 ? data.prospects : null;
-        setProspects(sheetProspects ?? JSON.parse(localStorage.getItem("connectin_prospects") || "[]"));
+        // Use Sheet prospects if present, merging any localStorage-only entries not yet saved
+        const cachedProspects = JSON.parse(localStorage.getItem("connectin_prospects") || "[]");
+        if (Array.isArray(data.prospects) && data.prospects.length > 0) {
+          const sheetPIds = new Set(data.prospects.map(p=>String(p.id)));
+          const localOnlyProspects = cachedProspects.filter(p=>!sheetPIds.has(String(p.id)));
+          setProspects([...data.prospects, ...localOnlyProspects]);
+        } else {
+          setProspects(cachedProspects);
+        }
       } catch {
         // Sheet unreachable — restore from localStorage so user data isn't lost
         const cachedLeads = localStorage.getItem("connectin_leads");
@@ -1659,8 +1669,10 @@ function EventTracker() {
             .filter(f => !f.uploading)
             .map(f => ({ id: f.id, name: f.name, size: f.size, type: f.type || "", driveUrl: f.driveUrl || null })),
         }));
-        await fetch(SHEET_URL,{method:"POST",body:JSON.stringify({leads:leadsToSave,owners,prospects})});
-        setLastSaved(new Date());
+        const saveRes = await fetch(SHEET_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads:leadsToSave,owners,prospects})});
+        const saveText = await saveRes.text();
+        if (saveText.trimStart().startsWith("<")) { setSaveError(true); } // GAS returned an HTML error page
+        else { setLastSaved(new Date()); }
       } catch { setSaveError(true); }
       finally { setSaving(false); }
     },1500);
