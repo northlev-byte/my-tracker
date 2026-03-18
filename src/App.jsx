@@ -2219,7 +2219,7 @@ function EventTracker() {
       </div>
       {/* Files Modal */}
       {showFiles&&activeLead&&(
-        <div className="overlay" onClick={e=>e.target===e.currentTarget&&{ setShowFiles(null); setFileUploadError(null); setFileUploadDebug(null); }}>
+        <div className="overlay" onClick={e=>{if(e.target===e.currentTarget){setShowFiles(null);setFileUploadError(null);setFileUploadDebug(null);}}}>
           <div className="modal" style={{width:500}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
               <div>
