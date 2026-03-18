@@ -1635,7 +1635,7 @@ function EventTracker() {
         // Sheet unreachable — restore from localStorage so user data isn't lost
         const cachedLeads = localStorage.getItem("connectin_leads");
         setLeads(cachedLeads ? JSON.parse(cachedLeads) : REAL_DATA);
-        setOwners(DEFAULT_OWNERS);
+        setOwners(JSON.parse(localStorage.getItem("connectin_owners") || "null") || DEFAULT_OWNERS);
         setProspects(JSON.parse(localStorage.getItem("connectin_prospects") || "[]"));
       } finally {
         // Mark load as complete — now saves are allowed
@@ -1645,11 +1645,13 @@ function EventTracker() {
     load();
   },[]);
 
-  // Mirror leads & prospects to localStorage on every change — ensures data survives
-  // Sheet outages or Apps Script failures
+  // Mirror leads, owners & prospects to localStorage on every change
   useEffect(()=>{
     if(leads!==null) localStorage.setItem("connectin_leads", JSON.stringify(leads));
   },[leads]);
+  useEffect(()=>{
+    if(owners!==null) localStorage.setItem("connectin_owners", JSON.stringify(owners));
+  },[owners]);
   useEffect(()=>{
     if(prospects!==null) localStorage.setItem("connectin_prospects", JSON.stringify(prospects));
   },[prospects]);
