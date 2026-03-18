@@ -1604,14 +1604,19 @@ function EventTracker() {
           const deduped = data.leads
             .map(l=>({...l, files:l.files||[], classCode:l.classCode||""}))
             .filter(l=>{ if(seen.has(String(l.id))) return false; seen.add(String(l.id)); return true; });
-          // Merge in any new events from REAL_DATA that aren't in the Sheet yet (by id)
           const sheetIds = new Set(deduped.map(l=>String(l.id)));
-          const newEntries = REAL_DATA.filter(l=>!sheetIds.has(String(l.id)));
-          // Also preserve any localStorage entries not yet saved to Sheets (e.g. from failed saves)
+          // Preserve localStorage entries not yet in Sheets (written during failed-save windows)
           const cached = localStorage.getItem("connectin_leads");
           const localLeads = cached ? JSON.parse(cached) : [];
+          const localIds = new Set(localLeads.map(l=>String(l.id)));
           const localOnly = localLeads.filter(l=>!sheetIds.has(String(l.id)));
-          const merged = [...deduped, ...newEntries, ...localOnly];
+          // Only add REAL_DATA entries missing from BOTH Sheets and localStorage
+          const realOnly = REAL_DATA.filter(l=>!sheetIds.has(String(l.id))&&!localIds.has(String(l.id)));
+          // Final dedup by id as a safety net (first occurrence wins)
+          const finalSeen = new Set();
+          const merged = [...deduped, ...localOnly, ...realOnly].filter(l=>{
+            if(finalSeen.has(String(l.id))) return false; finalSeen.add(String(l.id)); return true;
+          });
           setLeads(merged);
           // Keep localStorage in sync with the authoritative Sheet data
           localStorage.setItem("connectin_leads", JSON.stringify(merged));
