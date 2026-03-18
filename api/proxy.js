@@ -1,17 +1,13 @@
 // Vercel serverless proxy — forwards all requests to Google Apps Script.
 // This exists purely to avoid CORS: browsers can't POST directly to script.google.com
 // from a different origin, but a server-to-server call has no such restriction.
-//
-// IMPORTANT: GAS /exec endpoints issue a 302 redirect. Node fetch follows redirects
-// automatically but downgrades POST→GET on a 302, so doPost never fires.
-// Fix: use redirect:"manual", detect the 302, and re-POST to the Location URL.
 
 const GAS_URL =
   "https://script.google.com/macros/s/AKfycbx43ILL71R_N4G-6wsq2wXDtHau_ky1Ei78Xfu1TLcQpvWv8OPSX9lDCkBgKm_ckIFp/exec";
 
 export const config = {
   api: {
-    bodyParser: false, // read raw bytes so we can forward them unchanged
+    bodyParser: false,
   },
 };
 
@@ -42,39 +38,55 @@ export default async function handler(req, res) {
 
     if (req.method === "POST") {
       const rawBody = await readRawBody(req);
+      const bodyStr = rawBody.toString("utf8");
 
-      // Step 1: send POST with redirect:manual so we catch the 302 ourselves
-      const first = await fetch(GAS_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: rawBody,
-        redirect: "manual",
-      });
+      console.log("=== PROXY POST START ===");
+      console.log("Initial GAS URL:", GAS_URL);
+      console.log("Body length (bytes):", rawBody.length);
+      console.log("Body prefix (first 200 chars):", bodyStr.substring(0, 200));
 
-      console.log("[proxy] first response status:", first.status, "location:", first.headers.get("location"));
+      // Follow redirects manually, keeping POST at every hop
+      let currentUrl = GAS_URL;
+      let response;
+      let hop = 0;
 
-      let gasRes;
-      if (first.status >= 300 && first.status < 400) {
-        // Step 2: follow the redirect as a POST (not GET) to reach doPost
-        const redirectUrl = first.headers.get("location");
-        console.log("[proxy] re-POSTing to redirect URL:", redirectUrl);
-        gasRes = await fetch(redirectUrl, {
+      while (hop < 5) {
+        hop++;
+        const reqHeaders = { "Content-Type": "application/json" };
+        console.log(`--- Hop ${hop}: POST ${currentUrl}`);
+        console.log(`--- Hop ${hop}: sending headers:`, JSON.stringify(reqHeaders));
+
+        response = await fetch(currentUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: reqHeaders,
           body: rawBody,
+          redirect: "manual",
         });
-      } else {
-        gasRes = first;
+
+        console.log(`--- Hop ${hop}: response status:`, response.status);
+        console.log(`--- Hop ${hop}: response headers:`, JSON.stringify(Object.fromEntries(response.headers.entries())));
+
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get("location");
+          console.log(`--- Hop ${hop}: redirecting to:`, location);
+          if (!location) break;
+          currentUrl = location;
+        } else {
+          break; // non-redirect — this is the final response
+        }
       }
 
-      const text = await gasRes.text();
-      console.log("[proxy] final GAS response status:", gasRes.status, "body prefix:", text.substring(0, 120));
+      const text = await response.text();
+      console.log("=== FINAL response status:", response.status);
+      console.log("=== FINAL response body (first 600 chars):", text.substring(0, 600));
+      console.log("=== PROXY POST END ===");
+
       return res.status(200).send(text);
     }
 
     return res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
-    console.error("[proxy] GAS request failed:", err.message);
+    console.error("[proxy] request failed:", err.message, err.stack);
     return res.status(500).json({ error: err.message });
   }
 }
