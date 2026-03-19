@@ -1060,7 +1060,7 @@ function ProspectsTab({ prospects, setProspects, owners, leads, setLeads, setAct
 
               {/* Actions */}
               <div style={{ display: "flex", gap: 8, marginTop: 22, alignItems: "center", flexWrap: "wrap" }}>
-                <button onClick={() => deleteProspect(p.id)}
+                <button onClick={() => { if(window.confirm(`Delete prospect "${p.name}"?`)) deleteProspect(p.id); }}
                   style={{ background: "transparent", border: "none", color: "#ef4444", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "8px 4px", fontFamily: "inherit" }}>
                   Delete
                 </button>
@@ -1603,11 +1603,25 @@ function EventTracker() {
         if (Array.isArray(data.leads) && data.leads.length > 0) {
           const seen = new Set();
           const sheetLeads = data.leads
-            .map(l=>({...l, files:l.files||[], classCode:l.classCode||""}))
+            .map(l=>({...l, files: typeof l.files==="string" ? (() => { try { return JSON.parse(l.files); } catch { return []; } })() : (l.files||[]), classCode:l.classCode||""}))
             .filter(l=>{ if(seen.has(String(l.id))) return false; seen.add(String(l.id)); return true; });
           sheetLeadCountRef.current = sheetLeads.length;
           setLeads(sheetLeads);
           localStorage.setItem("connectin_leads", JSON.stringify(sheetLeads));
+
+          // Daily backup — once per calendar day, snapshot to Backups sheet
+          const today = new Date().toISOString().slice(0,10);
+          if (localStorage.getItem("connectin_last_backup") !== today) {
+            const owners = Array.isArray(data.owners) ? data.owners : DEFAULT_OWNERS;
+            const prospects = Array.isArray(data.prospects) ? data.prospects : [];
+            fetch(SHEET_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "backup", leads: sheetLeads, owners, prospects }),
+            }).then(r => r.json()).then(r => {
+              if (r.ok) localStorage.setItem("connectin_last_backup", today);
+            }).catch(() => {}); // silent — backup failure never interrupts the app
+          }
         } else {
           // Sheets empty — fall back to localStorage, then hardcoded seed data
           const cached = localStorage.getItem("connectin_leads");
@@ -2201,7 +2215,7 @@ function EventTracker() {
                         <td style={{padding:"6px 8px",whiteSpace:"nowrap"}}>
                           <button title="Duplicate" onClick={()=>duplicateLead(lead)}
                             style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:6,padding:"4px 8px",fontSize:12,cursor:"pointer",color:"#0369a1",fontWeight:600,fontFamily:"inherit",marginRight:4}}>⧉</button>
-                          <button className="btn-danger" onClick={()=>deleteLead(lead.id)}>✕</button>
+                          <button className="btn-danger" onClick={()=>{ if(window.confirm(`Delete "${lead.client} – ${lead.event}"?`)) deleteLead(lead.id); }}>✕</button>
                         </td>
                       </tr>
                     );
@@ -2252,7 +2266,7 @@ function EventTracker() {
                         style={{background:"#f3f4f6",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,cursor:"pointer",color:"#374151",fontWeight:600,fontFamily:"inherit"}}>
                         Edit
                       </button>
-                      <button className="btn-danger" onClick={()=>deleteLead(lead.id)}>✕</button>
+                      <button className="btn-danger" onClick={()=>{ if(window.confirm(`Delete "${lead.client} – ${lead.event}"?`)) deleteLead(lead.id); }}>✕</button>
                     </div>
                   </div>
                 </div>
@@ -2476,7 +2490,7 @@ function EventTracker() {
                 <input className="form-input" value={form.notes||""} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="e.g. Follow up next week"/></div>
             </div>
             <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
-              {editId&&<button className="btn-danger" onClick={()=>{deleteLead(editId);setShowForm(false);}} style={{marginRight:"auto"}}>Delete</button>}
+              {editId&&<button className="btn-danger" onClick={()=>{ if(window.confirm(`Delete "${form.client} – ${form.event}"?`)){deleteLead(editId);setShowForm(false);}}} style={{marginRight:"auto"}}>Delete</button>}
               <button className="btn-ghost" onClick={()=>setShowForm(false)}>Cancel</button>
               <button className="btn-primary" onClick={saveForm}>{editId?"Save Changes":"Add Entry"}</button>
             </div>
