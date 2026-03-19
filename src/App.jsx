@@ -1655,10 +1655,14 @@ function EventTracker() {
         const data = await res.json();
         // Sheets is the single source of truth — use it directly, overwrite localStorage
         if (Array.isArray(data.leads) && data.leads.length > 0) {
+          console.log("[LOAD] raw fields from Sheets (first lead):", Object.keys(data.leads[0] || {}));
+          console.log("[LOAD] raw first lead from Sheets:", JSON.parse(JSON.stringify(data.leads[0] || {})));
           const seen = new Set();
           const sheetLeads = data.leads
             .map(l=>({...l, files: typeof l.files==="string" ? (() => { try { return JSON.parse(l.files); } catch { return []; } })() : (l.files||[]), classCode:l.classCode||""}))
             .filter(l=>{ if(seen.has(String(l.id))) return false; seen.add(String(l.id)); return true; });
+          console.log("[LOAD] processed first lead (after mapping):", JSON.parse(JSON.stringify(sheetLeads[0] || {})));
+          console.log("[LOAD] total leads loaded from Sheets:", sheetLeads.length);
           sheetLeadCountRef.current = sheetLeads.length;
           setLeads(sheetLeads);
           localStorage.setItem("connectin_leads", JSON.stringify(sheetLeads));
@@ -1737,8 +1741,12 @@ function EventTracker() {
           setSaveError(true);
           return;
         }
+        console.log("[SAVE] sending", leadsToSave.length, "leads");
+        console.log("[SAVE] fields in payload (first lead):", Object.keys(leadsToSave[0] || {}));
+        console.log("[SAVE] first lead payload:", JSON.parse(JSON.stringify(leadsToSave[0] || {})));
         const saveRes = await fetch(SHEET_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads:leadsToSave,owners,prospects})});
         const saveText = await saveRes.text();
+        console.log("[SAVE] response status:", saveRes.status, "| body:", saveText.substring(0, 300));
         if (saveText.trimStart().startsWith("<")) { setSaveError(true); }
         else { sheetLeadCountRef.current = leadsToSave.length; setLastSaved(new Date()); }
       } catch { setSaveError(true); }
