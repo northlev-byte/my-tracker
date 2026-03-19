@@ -87,15 +87,18 @@ function doPost(e) {
   const leadsSheet = ss.getSheetByName("Events") || ss.insertSheet("Events");
   leadsSheet.clearContents();
   const headers = ["id","client","event","ref","date","endDate","venue","assignee","stage","name","company","email","value","notes","classCode","files"];
-  leadsSheet.appendRow(headers);
-  (payload.leads || []).forEach(row => leadsSheet.appendRow(headers.map(h => {
-    if (h === "files") return JSON.stringify(row[h] || []);
-    return row[h] ?? "";
+  const rows = [headers];
+  (payload.leads || []).forEach(lead => rows.push(headers.map(h => {
+    if (h === "files") return JSON.stringify(lead[h] || []);
+    return lead[h] ?? "";
   })));
+  leadsSheet.getRange(1, 1, rows.length, headers.length).setValues(rows);
 
   const ownersSheet = ss.getSheetByName("Owners") || ss.insertSheet("Owners");
   ownersSheet.clearContents();
-  (payload.owners || []).forEach(o => ownersSheet.appendRow([o]));
+  if ((payload.owners || []).length > 0) {
+    ownersSheet.getRange(1, 1, payload.owners.length, 1).setValues(payload.owners.map(o => [o]));
+  }
 
   return ContentService
     .createTextOutput(JSON.stringify({ success: true }))

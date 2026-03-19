@@ -2,7 +2,7 @@
   "framework": "vite",
   "functions": {
     "api/proxy.js": {
-      "maxDuration": 30
+      "maxDuration": 60
     }
   }
 }
