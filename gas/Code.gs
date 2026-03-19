@@ -8,7 +8,18 @@ function doGet(e) {
     const headers = leadsData[0];
     leads = leadsData.slice(1).map(row => {
       const obj = {};
-      headers.forEach((h, i) => obj[h] = row[i]);
+      headers.forEach((h, i) => {
+        const val = row[i];
+        // Sheets auto-converts date strings to Date objects — convert back to YYYY-MM-DD
+        if (val instanceof Date) {
+          const y = val.getFullYear();
+          const m = String(val.getMonth() + 1).padStart(2, '0');
+          const d = String(val.getDate()).padStart(2, '0');
+          obj[h] = `${y}-${m}-${d}`;
+        } else {
+          obj[h] = val;
+        }
+      });
       return obj;
     });
   }
