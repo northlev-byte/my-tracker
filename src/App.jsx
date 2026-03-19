@@ -1726,30 +1726,58 @@ function EventTracker() {
     saveTimer.current=setTimeout(async()=>{
       setSaving(true); setSaveError(false);
       try {
-        // Strip base64 data from files before saving — only keep Drive URLs (base64 is too large for Sheets cells)
+        // Strip base64 data from files before saving — only keep Drive URLs
         const leadsToSave = leads.map(l => ({
           ...l,
           files: (l.files||[])
             .filter(f => !f.uploading)
             .map(f => ({ id: f.id, name: f.name, size: f.size, type: f.type || "", driveUrl: f.driveUrl || null })),
         }));
-        // Safety check — block saves that drop the lead count by more than 5 at once
-        // (catches accidental bulk overwrites while allowing normal single deletions)
-        const drop = sheetLeadCountRef.current - leadsToSave.length;
-        if (sheetLeadCountRef.current > 0 && drop > 5) {
-          console.warn(`[save] blocked: would drop from ${sheetLeadCountRef.current} to ${leadsToSave.length} leads`);
+
+        // Hard lock 1: never save fewer than 70 leads under any circumstances
+        if (leadsToSave.length < 70) {
+          console.error(`[SAVE] HARD BLOCKED — ${leadsToSave.length} leads in state, minimum is 70. Save aborted.`);
           setSaveError(true);
           return;
         }
-        console.log("[SAVE] sending", leadsToSave.length, "leads");
-        console.log("[SAVE] fields in payload (first lead):", Object.keys(leadsToSave[0] || {}));
-        console.log("[SAVE] first lead payload:", JSON.parse(JSON.stringify(leadsToSave[0] || {})));
+
+        // Hard lock 2: block drops of more than 5 from the last known Sheets count
+        const drop = sheetLeadCountRef.current - leadsToSave.length;
+        if (sheetLeadCountRef.current > 0 && drop > 5) {
+          console.error(`[SAVE] HARD BLOCKED — would drop from ${sheetLeadCountRef.current} to ${leadsToSave.length} leads. Save aborted.`);
+          setSaveError(true);
+          return;
+        }
+
+        console.log("[SAVE] sending", leadsToSave.length, "leads to Sheets");
         const saveRes = await fetch(SHEET_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads:leadsToSave,owners,prospects})});
         const saveText = await saveRes.text();
-        console.log("[SAVE] response status:", saveRes.status, "| body:", saveText.substring(0, 300));
-        if (saveText.trimStart().startsWith("<")) { setSaveError(true); }
-        else { sheetLeadCountRef.current = leadsToSave.length; setLastSaved(new Date()); }
-      } catch { setSaveError(true); }
+        console.log("[SAVE] response:", saveRes.status, saveText.substring(0, 200));
+
+        // Only proceed if Sheets explicitly confirmed success
+        let saveOk = false;
+        try { saveOk = JSON.parse(saveText).success === true; } catch { saveOk = false; }
+        if (!saveOk) {
+          console.error("[SAVE] Sheets did not confirm success — save error shown");
+          setSaveError(true);
+          return;
+        }
+
+        // Verify: read back from Sheets immediately and confirm count matches what was sent
+        const verifyRes = await fetch(SHEET_URL);
+        const verifyData = await verifyRes.json();
+        const sheetCount = Array.isArray(verifyData.leads) ? verifyData.leads.length : 0;
+        console.log(`[SAVE VERIFY] sent ${leadsToSave.length} | Sheets now has ${sheetCount}`);
+        if (sheetCount !== leadsToSave.length) {
+          console.error(`[SAVE VERIFY] MISMATCH — sent ${leadsToSave.length}, Sheets returned ${sheetCount}. localStorage NOT updated.`);
+          setSaveError(true);
+          return;
+        }
+
+        // All checks passed — safe to confirm
+        sheetLeadCountRef.current = leadsToSave.length;
+        setLastSaved(new Date());
+      } catch(err) { console.error("[SAVE] exception:", err); setSaveError(true); }
       finally { setSaving(false); }
     },1500);
   },[leads,owners,prospects]);
