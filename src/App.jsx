@@ -131,7 +131,7 @@ const REAL_DATA = [
 
 ];
 
-const emptyForm = { client:"", event:"", ref:"", date:"", venue:"", assignee:"", stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" };
+const emptyForm = { client:"", event:"", ref:"", date:"", endDate:"", venue:"", assignee:"", stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" };
 
 // ── Helpers ──────────────────────────────────────────────
 function monthKey(dateStr) { return dateStr ? dateStr.substring(0,7) : null; }
@@ -237,6 +237,54 @@ function EditCell({ value, onSave, type="text", placeholder="—", mono=false })
             {type==="date"?fmt(value):(mono&&value?`£${Number(value).toLocaleString()}`:value)}
           </span>
         : <span style={{fontSize:12,color:"#d1d5db"}}>{placeholder}</span>}
+    </td>
+  );
+}
+
+// ── Date Range Cell ───────────────────────────────────────
+function fmtRange(s, e) {
+  if (!s) return null;
+  if (!e) return fmt(s);
+  const sd = new Date(s), ed = new Date(e);
+  if (isNaN(sd) || isNaN(ed) || ed <= sd) return fmt(s);
+  if (sd.getMonth()===ed.getMonth() && sd.getFullYear()===ed.getFullYear())
+    return `${sd.getDate()}–${ed.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})}`;
+  return `${fmt(s)} – ${fmt(e)}`;
+}
+function DateRangeCell({ startDate, endDate, onSaveStart, onSaveEnd }) {
+  const [editing, setEditing] = useState(false);
+  const [draftStart, setDraftStart] = useState(startDate||"");
+  const [draftEnd, setDraftEnd]     = useState(endDate||"");
+  const startRef = useRef();
+  useEffect(()=>{ if(editing) startRef.current?.focus(); },[editing]);
+  function commit() {
+    setEditing(false);
+    if (draftStart!==(startDate||"")) onSaveStart(draftStart);
+    if (draftEnd  !==(endDate||""))   onSaveEnd(draftEnd);
+  }
+  const inputStyle = {width:"100%",padding:"4px 7px",border:"1.5px solid #6366f1",borderRadius:5,fontSize:12,fontFamily:"inherit",outline:"none",background:"#fafafe"};
+  if (editing) return (
+    <td style={{padding:"6px 8px",verticalAlign:"middle"}}>
+      <div style={{display:"flex",flexDirection:"column",gap:3}}>
+        <input ref={startRef} type="date" value={draftStart} onChange={e=>setDraftStart(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape"){setDraftStart(startDate||"");setDraftEnd(endDate||"");setEditing(false);}}}
+          style={inputStyle}/>
+        <input type="date" value={draftEnd} onChange={e=>setDraftEnd(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape"){setDraftStart(startDate||"");setDraftEnd(endDate||"");setEditing(false);}}}
+          style={{...inputStyle,borderColor:"#a5b4fc"}}/>
+        <div style={{display:"flex",gap:4}}>
+          <button onMouseDown={e=>{e.preventDefault();commit();}} style={{flex:1,fontSize:10,padding:"2px 0",border:"none",background:"#6366f1",color:"#fff",borderRadius:4,cursor:"pointer"}}>Save</button>
+          {draftEnd&&<button onMouseDown={e=>{e.preventDefault();setDraftEnd("");}} style={{fontSize:10,padding:"2px 5px",border:"1px solid #e5e7eb",background:"#fff",color:"#9ca3af",borderRadius:4,cursor:"pointer"}}>✕ end</button>}
+        </div>
+      </div>
+    </td>
+  );
+  const display = fmtRange(startDate, endDate);
+  return (
+    <td onClick={()=>{setDraftStart(startDate||"");setDraftEnd(endDate||"");setEditing(true);}} title="Click to edit dates" style={{padding:"10px 12px",cursor:"text"}} className="edit-cell">
+      {display
+        ? <span style={{fontSize:13,color:"#374151",whiteSpace:"nowrap"}}>{display}</span>
+        : <span style={{fontSize:12,color:"#d1d5db"}}>date</span>}
     </td>
   );
 }
@@ -384,16 +432,22 @@ function CalendarView({ leads, onEventClick, holidays=[], recontacts=[] }) {
     cells.push(date);
   }
 
-  // Map events to their date string
+  // Map events to their date(s) — multi-day events appear on each day in range
   const eventsByDate = {};
   leads.forEach(lead => {
     if (!lead.date) return;
-    const d = new Date(lead.date);
-    if (isNaN(d)) return;
-    if (d.getFullYear()===calYear && d.getMonth()===calMonth) {
-      const key = d.getDate();
-      if (!eventsByDate[key]) eventsByDate[key] = [];
-      eventsByDate[key].push(lead);
+    const startD = new Date(lead.date);
+    if (isNaN(startD)) return;
+    const endD = (lead.endDate && !isNaN(new Date(lead.endDate)) && new Date(lead.endDate) > startD)
+      ? new Date(lead.endDate) : startD;
+    const cur = new Date(startD);
+    while (cur <= endD) {
+      if (cur.getFullYear()===calYear && cur.getMonth()===calMonth) {
+        const key = cur.getDate();
+        if (!eventsByDate[key]) eventsByDate[key] = [];
+        eventsByDate[key].push(lead);
+      }
+      cur.setDate(cur.getDate()+1);
     }
   });
 
@@ -2011,7 +2065,7 @@ function EventTracker() {
                       <td style={{padding:"10px 12px",fontSize:12,color:"#9ca3af",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.classCode||autoClass(lead)}</td>
                       <td style={{padding:"10px 12px",fontWeight:600,fontSize:13,color:"#6b7280"}}>{lead.client}</td>
                       <td style={{padding:"10px 12px",fontSize:13,color:"#6b7280"}}>{lead.event}</td>
-                      <td style={{padding:"10px 12px",fontSize:13,color:"#6b7280"}}>{fmt(lead.date)}</td>
+                      <td style={{padding:"10px 12px",fontSize:13,color:"#6b7280",whiteSpace:"nowrap"}}>{fmtRange(lead.date,lead.endDate)||"—"}</td>
                       <td style={{padding:"10px 12px",fontSize:13,color:"#6b7280"}}>{lead.venue}</td>
                       <td style={{padding:"10px 12px",fontSize:13,color:"#6b7280"}}>{lead.assignee}</td>
                       <td style={{padding:"10px 12px",fontSize:13,color:"#6b7280",fontFamily:"'DM Mono',monospace"}}>{lead.value?`£${Number(lead.value).toLocaleString()}`:"—"}</td>
@@ -2133,7 +2187,7 @@ function EventTracker() {
                     <th className="th" style={{background:"#fefce8",color:"#a16207"}}>Class</th>
                     <th className="th">Client</th>
                     <th className="th">Event</th>
-                    <th className="th">Date</th>
+                    <th className="th">Date(s)</th>
                     <th className="th">Venue</th>
                     <th className="th">Owner</th>
                     <th className="th th-lead" style={{borderLeft:"2px solid #ede9fe"}}>Contact</th>
@@ -2165,7 +2219,7 @@ function EventTracker() {
                           </div>
                         </td>
                         <EditCell value={lead.event}  onSave={v=>updateField(lead.id,"event",v)}  placeholder="event"/>
-                        <EditCell value={lead.date}   onSave={v=>updateField(lead.id,"date",v)}   type="date" placeholder="date"/>
+                        <DateRangeCell startDate={lead.date} endDate={lead.endDate} onSaveStart={v=>updateField(lead.id,"date",v)} onSaveEnd={v=>updateField(lead.id,"endDate",v)}/>
                         <td style={{padding:"10px 12px",fontSize:13}}>
                           <span style={{color:isTBC?"#f59e0b":"#374151",fontWeight:isTBC?700:400}}>
                             <EditCell value={lead.venue} onSave={v=>updateField(lead.id,"venue",v)} placeholder="venue"/>
@@ -2461,8 +2515,10 @@ function EventTracker() {
               ))}
               <div style={{gridColumn:"1/-1"}}><label className="form-label">Event Name</label>
                 <input className="form-input" value={form.event||""} onChange={e=>setForm(f=>({...f,event:e.target.value}))} placeholder="e.g. Summer Party 26"/></div>
-              <div><label className="form-label">Date</label>
+              <div><label className="form-label">Start Date</label>
                 <input className="form-input" type="date" value={form.date||""} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
+              <div><label className="form-label">End Date <span style={{fontWeight:400,color:"#9ca3af"}}>(optional)</span></label>
+                <input className="form-input" type="date" value={form.endDate||""} min={form.date||""} onChange={e=>setForm(f=>({...f,endDate:e.target.value}))}/></div>
               <div><label className="form-label">Venue</label>
                 <input className="form-input" value={form.venue||""} onChange={e=>setForm(f=>({...f,venue:e.target.value}))} placeholder="e.g. Lowry Hotel"/></div>
               <div><label className="form-label">Owner</label>
