@@ -1734,17 +1734,10 @@ function EventTracker() {
             .map(f => ({ id: f.id, name: f.name, size: f.size, type: f.type || "", driveUrl: f.driveUrl || null })),
         }));
 
-        // Hard lock 1: never save fewer than 70 leads under any circumstances
-        if (leadsToSave.length < 70) {
-          console.error(`[SAVE] HARD BLOCKED — ${leadsToSave.length} leads in state, minimum is 70. Save aborted.`);
-          setSaveError(true);
-          return;
-        }
-
-        // Hard lock 2: block drops of more than 5 from the last known Sheets count
+        // Drop guard: block any save that would reduce the Sheets count by more than 5 at once
         const drop = sheetLeadCountRef.current - leadsToSave.length;
         if (sheetLeadCountRef.current > 0 && drop > 5) {
-          console.error(`[SAVE] HARD BLOCKED — would drop from ${sheetLeadCountRef.current} to ${leadsToSave.length} leads. Save aborted.`);
+          console.error(`[SAVE] BLOCKED — would drop from ${sheetLeadCountRef.current} to ${leadsToSave.length} leads. Save aborted.`);
           setSaveError(true);
           return;
         }
