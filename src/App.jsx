@@ -2215,6 +2215,8 @@ function EventTracker() {
                         <td style={{padding:"6px 8px",whiteSpace:"nowrap"}}>
                           <button title="Duplicate" onClick={()=>duplicateLead(lead)}
                             style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:6,padding:"4px 8px",fontSize:12,cursor:"pointer",color:"#0369a1",fontWeight:600,fontFamily:"inherit",marginRight:4}}>⧉</button>
+                          <button title="Close Lost" onClick={()=>{ if(window.confirm(`Move "${lead.client} – ${lead.event}" to Closed Lost?`)) updateStage(lead.id,"Closed Lost"); }}
+                            style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:6,padding:"4px 8px",fontSize:12,cursor:"pointer",color:"#dc2626",fontWeight:600,fontFamily:"inherit",marginRight:4}}>✗</button>
                           <button className="btn-danger" onClick={()=>{ if(window.confirm(`Delete "${lead.client} – ${lead.event}"?`)) deleteLead(lead.id); }}>✕</button>
                         </td>
                       </tr>
@@ -2266,6 +2268,8 @@ function EventTracker() {
                         style={{background:"#f3f4f6",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,cursor:"pointer",color:"#374151",fontWeight:600,fontFamily:"inherit"}}>
                         Edit
                       </button>
+                      <button onClick={()=>{ if(window.confirm(`Move "${lead.client} – ${lead.event}" to Closed Lost?`)) updateStage(lead.id,"Closed Lost"); }}
+                        style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:7,padding:"6px 10px",fontSize:12,cursor:"pointer",color:"#dc2626",fontWeight:600,fontFamily:"inherit"}}>✗ Lost</button>
                       <button className="btn-danger" onClick={()=>{ if(window.confirm(`Delete "${lead.client} – ${lead.event}"?`)) deleteLead(lead.id); }}>✕</button>
                     </div>
                   </div>
@@ -2490,7 +2494,8 @@ function EventTracker() {
                 <input className="form-input" value={form.notes||""} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="e.g. Follow up next week"/></div>
             </div>
             <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
-              {editId&&<button className="btn-danger" onClick={()=>{ if(window.confirm(`Delete "${form.client} – ${form.event}"?`)){deleteLead(editId);setShowForm(false);}}} style={{marginRight:"auto"}}>Delete</button>}
+              {editId&&<button onClick={()=>{ if(window.confirm(`Move "${form.client} – ${form.event}" to Closed Lost?`)){updateStage(editId,"Closed Lost");setShowForm(false);}}} style={{marginRight:"auto",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:7,padding:"6px 14px",fontSize:13,cursor:"pointer",color:"#dc2626",fontWeight:600,fontFamily:"inherit"}}>✗ Closed Lost</button>}
+              {editId&&<button className="btn-danger" onClick={()=>{ if(window.confirm(`Delete "${form.client} – ${form.event}"?`)){deleteLead(editId);setShowForm(false);}}} style={{marginLeft:0}}>Delete</button>}
               <button className="btn-ghost" onClick={()=>setShowForm(false)}>Cancel</button>
               <button className="btn-primary" onClick={saveForm}>{editId?"Save Changes":"Add Entry"}</button>
             </div>
