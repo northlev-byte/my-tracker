@@ -1993,7 +1993,7 @@ function EventTracker() {
   .section-divider{font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;padding:14px 0 8px;border-bottom:1px solid #f3f4f6;margin-bottom:14px}
 
   /* ── Table header ────────────────────────────────── */
-  .th{padding:13px 14px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
+  .th{padding:10px 10px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
   .th-lead{color:#a78bfa}
   .thead-sticky{position:sticky;top:58px;z-index:5}
 
@@ -2027,7 +2027,10 @@ function EventTracker() {
   .app-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;scrollbar-width:none}
   .app-tabs::-webkit-scrollbar{display:none}
   .kanban-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
-  .leads-table-wrap{display:block}
+  .leads-table-wrap{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .leads-table-wrap::-webkit-scrollbar{height:6px}
+  .leads-table-wrap::-webkit-scrollbar-track{background:#f1f5f9}
+  .leads-table-wrap::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
   .leads-cards{display:none}
   .controls-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
   .controls-search{flex:1;min-width:180px;position:relative}
@@ -2283,8 +2286,8 @@ function EventTracker() {
 
         {/* Table */}
         {view==="table"&&(
-          <div className="leads-table-wrap" style={{background:"#fff",borderRadius:12,border:"1.5px solid #e5e7eb",overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",minWidth:1200}}>
+          <div className="leads-table-wrap" style={{background:"#fff",borderRadius:12,border:"1.5px solid #e5e7eb"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",minWidth:950}}>
                 <thead>
                   <tr style={{borderBottom:"1.5px solid #f3f4f6",background:"#fafafa"}}>
                     <th className="th">Ref</th>
