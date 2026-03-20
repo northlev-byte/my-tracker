@@ -3,6 +3,44 @@ import { useState, useMemo, useEffect, useRef } from "react";
 const PASSWORD = "ConnectinEvents";
 
 const STAGES = ["New", "Contacted", "Qualified", "Proposal", "Closed Won", "Closed Lost"];
+
+// ConnectIn brand confetti colours
+const CONFETTI_COLORS = ["#0d3d2a","#16a34a","#4ade80","#bbf7d0","#fbbf24","#ffffff","#22c55e"];
+
+function fireConfetti(originEl) {
+  if (!originEl) return;
+  const rect = originEl.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const count = 54;
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement("div");
+    const size = 5 + Math.random() * 7;
+    const isCircle = Math.random() > 0.4;
+    const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+    el.style.cssText = `position:fixed;left:${cx}px;top:${cy}px;width:${size}px;height:${isCircle ? size : size * 0.5}px;background:${color};border-radius:${isCircle ? "50%" : "2px"};pointer-events:none;z-index:99999;`;
+    document.body.appendChild(el);
+    const angle = (Math.random() * 360) * (Math.PI / 180);
+    const speed = 90 + Math.random() * 130;
+    const vx = Math.cos(angle) * speed;
+    const vy = Math.sin(angle) * speed - 80;
+    const rotDir = Math.random() > 0.5 ? 1 : -1;
+    const rotSpeed = 200 + Math.random() * 400;
+    const duration = 1800 + Math.random() * 800;
+    let start = null;
+    (function animate(ts) {
+      if (!start) start = ts;
+      const t = (ts - start) / 1000;
+      const prog = (ts - start) / duration;
+      if (prog >= 1) { el.remove(); return; }
+      el.style.left = (cx + vx * t) + "px";
+      el.style.top  = (cy + vy * t + 220 * t * t) + "px";
+      el.style.opacity = String(Math.max(0, 1 - Math.pow(prog, 0.8)));
+      el.style.transform = `rotate(${rotDir * rotSpeed * t}deg)`;
+      requestAnimationFrame(animate);
+    })(performance.now());
+  }
+}
 const STAGE_COLORS = {
   "New":         { bg: "#e8f4fd", text: "#1a6fa8", dot: "#3b9edd" },
   "Contacted":   { bg: "#fff3e0", text: "#b45309",  dot: "#f59e0b" },
@@ -2346,7 +2384,7 @@ function EventTracker() {
                         <EditCell value={lead.email}     onSave={v=>updateField(lead.id,"email",v)}   type="email" placeholder="add email"/>
                         <EditCell value={lead.value}     onSave={v=>updateField(lead.id,"value",v)}   type="number" placeholder="add value" mono={true}/>
                         <td style={{padding:"8px 10px",borderLeft:"2px solid #f9fafb"}}>
-                          <select value={lead.stage} onChange={e=>updateStage(lead.id,e.target.value)}
+                          <select value={lead.stage} onChange={e=>{if(e.target.value==="Closed Won")fireConfetti(e.target);updateStage(lead.id,e.target.value);}}
                             className="stage-pill"
                             style={{background:sc.bg,color:sc.text,boxShadow:`inset 0 0 0 1.5px ${sc.dot}33`}}>
                             {STAGES.map(s=><option key={s}>{s}</option>)}
@@ -2405,7 +2443,7 @@ function EventTracker() {
                       {mc&&<span style={{width:8,height:8,borderRadius:"50%",background:mc.bar,display:"inline-block",flexShrink:0}}/>}
                       <span style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.client}</span>
                     </div>
-                    <select value={lead.stage} onChange={e=>updateStage(lead.id,e.target.value)}
+                    <select value={lead.stage} onChange={e=>{if(e.target.value==="Closed Won")fireConfetti(e.target);updateStage(lead.id,e.target.value);}}
                       className="stage-pill"
                       style={{background:sc.bg,color:sc.text,boxShadow:`inset 0 0 0 1.5px ${sc.dot}33`,flexShrink:0}}>
                       {STAGES.map(s=><option key={s}>{s}</option>)}
