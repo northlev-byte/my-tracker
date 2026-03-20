@@ -2283,7 +2283,7 @@ function EventTracker() {
 
         {/* Table */}
         {view==="table"&&(
-          <div className="leads-table-wrap" style={{background:"#fff",borderRadius:12,border:"1.5px solid #e5e7eb",overflow:"hidden"}}>
+          <div className="leads-table-wrap" style={{background:"#fff",borderRadius:12,border:"1.5px solid #e5e7eb",overflow:"clip"}}>
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",minWidth:1200}}>
                 <thead>
