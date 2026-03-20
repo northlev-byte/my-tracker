@@ -2283,8 +2283,7 @@ function EventTracker() {
 
         {/* Table */}
         {view==="table"&&(
-          <div className="leads-table-wrap" style={{background:"#fff",borderRadius:12,border:"1.5px solid #e5e7eb",overflow:"clip"}}>
-            <div style={{overflowX:"auto"}}>
+          <div className="leads-table-wrap" style={{background:"#fff",borderRadius:12,border:"1.5px solid #e5e7eb",overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",minWidth:1200}}>
                 <thead>
                   <tr style={{borderBottom:"1.5px solid #f3f4f6",background:"#fafafa"}}>
@@ -2385,7 +2384,6 @@ function EventTracker() {
                 </tbody>
               </table>
               {filtered.length>0&&<div className="pipeline-total"><span style={{fontSize:12,fontWeight:500,color:"#6366f1",opacity:.8}}>Pipeline total ({filtered.length} event{filtered.length!==1?"s":""})</span><span style={{fontSize:16,fontWeight:800,letterSpacing:"-.02em"}}>£{pipelineTotal.toLocaleString()}</span></div>}
-            </div>
           </div>
         )}
 
