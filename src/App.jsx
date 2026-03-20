@@ -1993,7 +1993,7 @@ function EventTracker() {
   .section-divider{font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;padding:14px 0 8px;border-bottom:1px solid #f3f4f6;margin-bottom:14px}
 
   /* ── Table header ────────────────────────────────── */
-  .th{padding:13px 14px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap;position:sticky;top:58px;background:#fafafa;z-index:5}
+  .th{padding:13px 14px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
   .th-lead{color:#a78bfa}
   .thead-sticky{position:sticky;top:58px;z-index:5}
 
@@ -2094,13 +2094,9 @@ function EventTracker() {
       <div className="app-header" style={{background:darkMode?"#1e293b":"#fff",borderBottom:`1.5px solid ${darkMode?"#334155":"#e5e7eb"}`,position:"sticky",top:0,zIndex:50,boxShadow:"0 1px 8px rgba(0,0,0,.06)"}}>
         <div className="app-header-inner">
           <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
-            {/* Logo mark */}
-            <div style={{width:34,height:34,background:"linear-gradient(135deg,#4f46e5,#818cf8)",borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(99,102,241,.35)"}}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            </div>
-            <div style={{minWidth:0}}>
-              <div className="app-header-title" style={{fontWeight:800,fontSize:16,color:darkMode?"#f1f5f9":"#111827",letterSpacing:"-.03em",lineHeight:1.1,whiteSpace:"nowrap",fontFamily:"Inter,sans-serif"}}>ConnectIn Events</div>
-              <div style={{fontSize:10,color:darkMode?"#64748b":"#9ca3af",fontWeight:500,letterSpacing:".04em",textTransform:"uppercase"}}>Event & Pipeline Tracker</div>
+            {/* ConnectIn logo */}
+            <div style={{background:"#0d3d2a",borderRadius:8,padding:"5px 10px",flexShrink:0,display:"flex",alignItems:"center"}}>
+              <img src="https://connectinevents.co.uk/wp-content/uploads/2025/04/connectin-logo-green-white.png" alt="ConnectIn Events" style={{height:28,width:"auto",display:"block"}}/>
             </div>
             {saving&&<span style={{fontSize:11,color:"#f59e0b",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:999,padding:"2px 10px",fontWeight:700,whiteSpace:"nowrap"}}>⏳ Saving…</span>}
             {!saving&&saveError&&<span style={{fontSize:11,color:"#ef4444",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:999,padding:"2px 10px",fontWeight:700,whiteSpace:"nowrap"}}>⚠️ Save failed</span>}
@@ -2291,7 +2287,7 @@ function EventTracker() {
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",minWidth:1200}}>
                 <thead>
-                  <tr style={{borderBottom:"1.5px solid #f3f4f6",background:"#fafafa",position:"sticky",top:62,zIndex:5}}>
+                  <tr style={{borderBottom:"1.5px solid #f3f4f6",background:"#fafafa"}}>
                     <th className="th">Ref</th>
                     <th className="th" style={{background:"#fefce8",color:"#a16207"}}>Class</th>
                     <th className="th">Client</th>
