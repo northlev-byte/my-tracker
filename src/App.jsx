@@ -1636,6 +1636,8 @@ function EventTracker() {
   const [saving, setSaving]                 = useState(false);
   const [lastSaved, setLastSaved]           = useState(null);
   const [saveError, setSaveError]           = useState(false);
+  const [darkMode, setDarkMode] = useState(()=>localStorage.getItem("connectin_dark")==="1");
+  useEffect(()=>{ localStorage.setItem("connectin_dark", darkMode?"1":"0"); document.body.style.background = darkMode?"#0f172a":"#f7f8fa"; },[darkMode]);
   const saveTimer = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -1803,6 +1805,7 @@ function EventTracker() {
   },[fyLeads,search,filterStage,filterAssignee,sortBy]);
 
   const confirmedVal = fyLeads.filter(l=>l.stage==="Closed Won").reduce((s,l)=>s+Number(l.value||0),0);
+  const pipelineTotal = filtered.reduce((s,l)=>s+Number(l.value||0),0);
   const warmVal      = fyLeads.filter(l=>l.stage==="Proposal").reduce((s,l)=>s+Number(l.value||0),0);
   const coldVal      = fyLeads.filter(l=>l.stage==="New").reduce((s,l)=>s+Number(l.value||0),0);
   const tbcCount     = fyLeads.filter(l=>l.venue?.trim().toUpperCase()==="TBC").length;
@@ -1928,7 +1931,7 @@ function EventTracker() {
   const activeLead = showFiles ? (leads||[]).find(l=>l.id===showFiles) : null;
 
   return (
-    <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:"#f7f8fa",minHeight:"100vh"}}>
+    <div className={darkMode?"dark-mode":""} style={{fontFamily:"'Inter','DM Sans','Segoe UI',sans-serif",background:darkMode?"#0f172a":"#f7f8fa",minHeight:"100vh",transition:"background .2s"}}>
       {leads===null&&(
         <div style={{position:"fixed",inset:0,background:"#f7f8fa",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>
           <div style={{textAlign:"center"}}>
@@ -1939,95 +1942,169 @@ function EventTracker() {
         </div>
       )}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
-        *{box-sizing:border-box}
-        .btn-primary{background:#111827;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:600;font-size:13px;cursor:pointer;transition:background .15s;font-family:inherit;display:flex;align-items:center;gap:6px}
-        .btn-primary:hover{background:#374151}
-        .btn-ghost{background:transparent;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 13px;font-size:13px;font-weight:500;cursor:pointer;color:#374151;transition:all .15s;font-family:inherit;display:flex;align-items:center;gap:5px}
-        .btn-ghost:hover{background:#f3f4f6;border-color:#d1d5db}
-        .btn-danger{background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:4px 7px;border-radius:6px;transition:background .15s;font-family:inherit}
-        .btn-danger:hover{background:#fef2f2}
-        input,select,textarea{font-family:inherit}
-        .row-hover:hover{background:#fafbff}
-        .edit-cell:hover{background:#f5f5ff}
-        .kanban-card{background:#fff;border-radius:10px;border:1.5px solid #e5e7eb;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:box-shadow .15s,border-color .15s}
-        .kanban-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.07);border-color:#c7d2da}
-        .overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
-        .modal{background:#fff;border-radius:16px;padding:28px;width:560px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
-        .form-label{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;display:block}
-        .form-input{width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:14px;color:#111827;outline:none;transition:border-color .15s;background:#fff}
-        .form-input:focus{border-color:#6366f1}
-        select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
-        .stat-card{background:#fff;border-radius:12px;border:1.5px solid #e5e7eb;padding:18px 22px}
-        .section-divider{font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;padding:14px 0 8px;border-bottom:1px solid #f3f4f6;margin-bottom:14px}
-        .th{padding:11px 12px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
-        .th-lead{color:#a78bfa}
-        .fy-tab{padding:7px 16px;border-radius:8px;border:1.5px solid #e5e7eb;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;background:#fff;color:#6b7280;white-space:nowrap}
-        .fy-tab-active{background:#111827;color:#fff;border-color:#111827}
-        .tab-btn{padding:10px 16px;font-size:14px;white-space:nowrap;flex-shrink:0}
-        .tab-label-short{display:none}
-        .tab-label-full{display:inline}
-        .file-drop{border:2px dashed #e5e7eb;border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:all .15s}
-        .file-drop:hover{border-color:#6366f1;background:#fafafe}
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+  *{box-sizing:border-box}
 
-        /* ── Layout ─────────────────────────────────────── */
-        .app-header-inner{max-width:1500px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:58px;gap:12px}
-        .app-header-right{display:flex;gap:8px;align-items:center;flex-shrink:0}
-        .app-main{max-width:1500px;margin:0 auto;padding:22px 24px}
-        .app-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;scrollbar-width:none}
-        .app-tabs::-webkit-scrollbar{display:none}
-        .kanban-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
-        .leads-table-wrap{display:block}
-        .leads-cards{display:none}
-        .controls-row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
-        .controls-search{flex:1;min-width:180px;position:relative}
-        .controls-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  /* ── Keyframes ───────────────────────────────────── */
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes rowFadeOut{0%{opacity:1;transform:scaleY(1)}100%{opacity:0;transform:scaleY(0);max-height:0;padding:0}}
+  @keyframes savePop{0%{opacity:0;transform:translateY(-4px) scale(.95)}60%{transform:translateY(1px) scale(1.02)}100%{opacity:1;transform:translateY(0) scale(1)}}
+  @keyframes badgePop{0%{transform:scale(1)}40%{transform:scale(1.12)}100%{transform:scale(1)}}
 
-        /* ── Mobile ─────────────────────────────────────── */
-        @media(max-width:768px){
-          .app-header-inner{height:auto;padding:10px 14px;flex-wrap:wrap;gap:6px}
-          .app-header-right{gap:6px;flex-wrap:wrap;justify-content:flex-end;width:100%}
-          .app-main{padding:14px 12px}
-          .save-badge{display:none}
-          .btn-label{display:none}
-          .fy-tab{padding:5px 10px;font-size:12px}
-          .btn-ghost,.btn-primary{padding:8px 10px}
-          .kanban-grid{grid-template-columns:repeat(3,minmax(200px,1fr));overflow-x:auto;-webkit-overflow-scrolling:touch}
-          .modal{padding:20px 16px !important;width:100% !important;border-radius:16px 16px 0 0 !important;max-height:92vh !important}
-          .overlay{align-items:flex-end !important;padding:0 !important}
-          .stat-card{padding:14px 16px}
-          .leads-table-wrap{display:none}
-          .leads-cards{display:flex;flex-direction:column;gap:8px}
-          .controls-row{flex-direction:column;align-items:stretch}
-          .controls-search{min-width:0}
-          .controls-filters{width:100%;flex-wrap:wrap}
-          .controls-filters select{flex:1;min-width:120px}
-          .tab-btn{padding:8px 10px;font-size:13px}
-          .tab-label-full{display:none !important}
-          .tab-label-short{display:inline !important}
-          .view-switcher{align-self:flex-start}
-          .app-header-title{font-size:14px !important}
-        }
-        @media(max-width:480px){
-          .app-header-inner{padding:8px 10px}
-          .app-main{padding:10px 8px}
-          .kanban-grid{grid-template-columns:repeat(6,minmax(180px,1fr));overflow-x:auto}
-          .tab-btn{padding:6px 8px;font-size:12px}
-          .fy-tab{padding:4px 8px;font-size:11px}
-        }
-      `}</style>
+  /* ── Base buttons ────────────────────────────────── */
+  .btn-primary{background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff;border:none;border-radius:9px;padding:9px 18px;font-weight:600;font-size:13px;cursor:pointer;transition:all .18s;font-family:inherit;display:flex;align-items:center;gap:6px;box-shadow:0 1px 4px rgba(99,102,241,.3)}
+  .btn-primary:hover{background:linear-gradient(135deg,#4338ca,#4f46e5);box-shadow:0 4px 12px rgba(99,102,241,.4);transform:translateY(-1px)}
+  .btn-ghost{background:transparent;border:1.5px solid #e5e7eb;border-radius:9px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;color:#374151;transition:all .15s;font-family:inherit;display:flex;align-items:center;gap:5px}
+  .btn-ghost:hover{background:#f3f4f6;border-color:#d1d5db}
+  .btn-danger{background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:4px 7px;border-radius:6px;transition:background .15s;font-family:inherit}
+  .btn-danger:hover{background:#fef2f2}
+  input,select,textarea{font-family:inherit}
+
+  /* ── Table rows ──────────────────────────────────── */
+  .row-hover{transition:background .12s}
+  .row-hover:hover{background:#f8f7ff}
+  .row-exit{animation:rowFadeOut .25s ease forwards}
+  .edit-cell:hover{background:#f0f0ff;cursor:text}
+
+  /* ── Stage pills ─────────────────────────────────── */
+  .stage-pill{border:none;border-radius:999px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;outline:none;transition:all .2s;animation:badgePop .2s ease}
+  .stage-pill:focus{box-shadow:0 0 0 3px rgba(99,102,241,.25)}
+
+  /* ── Save badge ──────────────────────────────────── */
+  .save-badge{animation:savePop .3s ease}
+
+  /* ── Cards / Kanban ──────────────────────────────── */
+  .kanban-card{background:#fff;border-radius:12px;border:1.5px solid #e5e7eb;padding:13px 15px;margin-bottom:8px;cursor:pointer;transition:box-shadow .15s,border-color .15s,transform .15s}
+  .kanban-card:hover{box-shadow:0 6px 20px rgba(0,0,0,.08);border-color:#c7d2da;transform:translateY(-1px)}
+
+  /* ── Modals ──────────────────────────────────────── */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(2px)}
+  .modal{background:#fff;border-radius:18px;padding:28px;width:560px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.22)}
+
+  /* ── Forms ───────────────────────────────────────── */
+  .form-label{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;display:block}
+  .form-input{width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:14px;color:#111827;outline:none;transition:border-color .15s,box-shadow .15s;background:#fff}
+  .form-input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+  select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+
+  /* ── Misc ────────────────────────────────────────── */
+  .stat-card{background:#fff;border-radius:14px;border:1.5px solid #e5e7eb;padding:18px 22px;transition:box-shadow .15s}
+  .stat-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.06)}
+  .section-divider{font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;padding:14px 0 8px;border-bottom:1px solid #f3f4f6;margin-bottom:14px}
+
+  /* ── Table header ────────────────────────────────── */
+  .th{padding:13px 14px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap;position:sticky;top:58px;background:#fafafa;z-index:5}
+  .th-lead{color:#a78bfa}
+  .thead-sticky{position:sticky;top:58px;z-index:5}
+
+  /* ── FY tabs ─────────────────────────────────────── */
+  .fy-tab{padding:7px 16px;border-radius:8px;border:1.5px solid #e5e7eb;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;background:#fff;color:#6b7280;white-space:nowrap}
+  .fy-tab-active{background:#111827;color:#fff;border-color:#111827}
+
+  /* ── Nav tabs ────────────────────────────────────── */
+  .tab-btn{padding:10px 16px;font-size:14px;white-space:nowrap;flex-shrink:0}
+  .tab-label-short{display:none}
+  .tab-label-full{display:inline}
+
+  /* ── File drop ───────────────────────────────────── */
+  .file-drop{border:2px dashed #e5e7eb;border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:all .15s}
+  .file-drop:hover{border-color:#6366f1;background:#fafafe}
+
+  /* ── Pipeline total bar ──────────────────────────── */
+  .pipeline-total{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:12px 16px;background:linear-gradient(90deg,#f8f7ff,#eef2ff);border-top:2px solid #e0e7ff;font-size:13px;font-weight:700;color:#4338ca;border-radius:0 0 12px 12px}
+
+  /* ── Empty state ─────────────────────────────────── */
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:64px 24px;gap:16px;text-align:center}
+
+  /* ── Dark mode toggle ────────────────────────────── */
+  .dark-toggle{background:transparent;border:1.5px solid #e5e7eb;border-radius:9px;padding:7px 10px;cursor:pointer;font-size:15px;line-height:1;transition:all .15s;font-family:inherit}
+  .dark-toggle:hover{background:#f3f4f6}
+
+  /* ── Layout ──────────────────────────────────────── */
+  .app-header-inner{max-width:1500px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:62px;gap:12px}
+  .app-header-right{display:flex;gap:8px;align-items:center;flex-shrink:0}
+  .app-main{max-width:1500px;margin:0 auto;padding:24px 24px}
+  .app-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;scrollbar-width:none}
+  .app-tabs::-webkit-scrollbar{display:none}
+  .kanban-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+  .leads-table-wrap{display:block}
+  .leads-cards{display:none}
+  .controls-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+  .controls-search{flex:1;min-width:180px;position:relative}
+  .controls-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+  /* ── Dark mode ───────────────────────────────────── */
+  .dark-mode{background:#0f172a;color:#e2e8f0}
+  .dark-mode .app-header{background:#1e293b !important;border-color:#334155 !important}
+  .dark-mode .app-main-bg{background:#0f172a}
+  .dark-mode .stat-card,.dark-mode .modal,.dark-mode .kanban-card{background:#1e293b !important;border-color:#334155 !important;color:#e2e8f0}
+  .dark-mode .form-input{background:#0f172a !important;border-color:#334155 !important;color:#e2e8f0 !important}
+  .dark-mode .btn-ghost{border-color:#334155;color:#cbd5e1}
+  .dark-mode .btn-ghost:hover{background:#1e293b}
+  .dark-mode .dark-toggle{border-color:#334155;color:#e2e8f0}
+  .dark-mode .leads-table-wrap{background:#1e293b !important;border-color:#334155 !important}
+  .dark-mode table{background:#1e293b}
+  .dark-mode .th{background:#1e293b !important;color:#64748b}
+  .dark-mode .row-hover:hover{background:#273449}
+  .dark-mode .edit-cell:hover{background:#1e3a5f}
+  .dark-mode .pipeline-total{background:linear-gradient(90deg,#1e293b,#1e2d52);border-color:#3730a3}
+  .dark-mode .controls-row input,.dark-mode .controls-row select{background:#1e293b !important;border-color:#334155 !important;color:#e2e8f0 !important}
+  .dark-mode td{color:#cbd5e1 !important;border-color:#334155 !important}
+  .dark-mode .fy-tab{background:#1e293b;border-color:#334155;color:#94a3b8}
+  .dark-mode .fy-tab-active{background:#6366f1;border-color:#6366f1;color:#fff}
+  .dark-mode .tab-btn{color:#94a3b8 !important}
+  .dark-mode .section-divider{border-color:#334155;color:#475569}
+
+  /* ── Mobile ──────────────────────────────────────── */
+  @media(max-width:768px){
+    .app-header-inner{height:auto;padding:10px 14px;flex-wrap:wrap;gap:6px}
+    .app-header-right{gap:6px;flex-wrap:wrap;justify-content:flex-end;width:100%}
+    .app-main{padding:14px 12px}
+    .save-badge{display:none}
+    .btn-label{display:none}
+    .fy-tab{padding:5px 10px;font-size:12px}
+    .btn-ghost,.btn-primary{padding:8px 10px}
+    .kanban-grid{grid-template-columns:repeat(3,minmax(200px,1fr));overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .modal{padding:20px 16px !important;width:100% !important;border-radius:16px 16px 0 0 !important;max-height:92vh !important}
+    .overlay{align-items:flex-end !important;padding:0 !important}
+    .stat-card{padding:14px 16px}
+    .leads-table-wrap{display:none}
+    .leads-cards{display:flex;flex-direction:column;gap:10px}
+    .controls-row{flex-direction:column;align-items:stretch}
+    .controls-search{min-width:0}
+    .controls-filters{width:100%;flex-wrap:wrap}
+    .controls-filters select{flex:1;min-width:120px}
+    .tab-btn{padding:8px 10px;font-size:13px}
+    .tab-label-full{display:none !important}
+    .tab-label-short{display:inline !important}
+    .view-switcher{align-self:flex-start}
+    .app-header-title{font-size:15px !important}
+    .th{top:0}
+  }
+  @media(max-width:480px){
+    .app-header-inner{padding:8px 10px}
+    .app-main{padding:10px 8px}
+    .kanban-grid{grid-template-columns:repeat(6,minmax(180px,1fr));overflow-x:auto}
+    .tab-btn{padding:6px 8px;font-size:12px}
+    .fy-tab{padding:4px 8px;font-size:11px}
+  }
+`}</style>
 
       {/* Header */}
-      <div style={{background:"#fff",borderBottom:"1.5px solid #e5e7eb",position:"sticky",top:0,zIndex:50}}>
+      <div className="app-header" style={{background:darkMode?"#1e293b":"#fff",borderBottom:`1.5px solid ${darkMode?"#334155":"#e5e7eb"}`,position:"sticky",top:0,zIndex:50,boxShadow:"0 1px 8px rgba(0,0,0,.06)"}}>
         <div className="app-header-inner">
           <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
-            <div style={{width:30,height:30,background:"#111827",borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            {/* Logo mark */}
+            <div style={{width:34,height:34,background:"linear-gradient(135deg,#4f46e5,#818cf8)",borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(99,102,241,.35)"}}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
             </div>
-            <span className="app-header-title" style={{fontWeight:700,fontSize:16,color:"#111827",letterSpacing:"-.02em",whiteSpace:"nowrap"}}>Event & Lead Tracker</span>
-            {saving&&<span style={{fontSize:11,color:"#f59e0b",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:999,padding:"2px 8px",fontWeight:600,whiteSpace:"nowrap"}}>⏳ Saving…</span>}
-            {!saving&&saveError&&<span style={{fontSize:11,color:"#ef4444",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:999,padding:"2px 8px",fontWeight:600,whiteSpace:"nowrap"}}>⚠️ Save failed</span>}
-            {!saving&&!saveError&&lastSaved&&<span className="save-badge" style={{fontSize:11,color:"#22c55e",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:999,padding:"2px 8px",fontWeight:600,whiteSpace:"nowrap"}}>✓ Saved</span>}
+            <div style={{minWidth:0}}>
+              <div className="app-header-title" style={{fontWeight:800,fontSize:16,color:darkMode?"#f1f5f9":"#111827",letterSpacing:"-.03em",lineHeight:1.1,whiteSpace:"nowrap",fontFamily:"Inter,sans-serif"}}>ConnectIn Events</div>
+              <div style={{fontSize:10,color:darkMode?"#64748b":"#9ca3af",fontWeight:500,letterSpacing:".04em",textTransform:"uppercase"}}>Event & Pipeline Tracker</div>
+            </div>
+            {saving&&<span style={{fontSize:11,color:"#f59e0b",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:999,padding:"2px 10px",fontWeight:700,whiteSpace:"nowrap"}}>⏳ Saving…</span>}
+            {!saving&&saveError&&<span style={{fontSize:11,color:"#ef4444",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:999,padding:"2px 10px",fontWeight:700,whiteSpace:"nowrap"}}>⚠️ Save failed</span>}
+            {!saving&&!saveError&&lastSaved&&<span key={lastSaved.getTime()} className="save-badge" style={{fontSize:11,color:"#22c55e",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:999,padding:"2px 10px",fontWeight:700,whiteSpace:"nowrap"}}>✓ Saved</span>}
           </div>
           <div className="app-header-right">
             <div style={{display:"flex",gap:6}}>
@@ -2035,7 +2112,10 @@ function EventTracker() {
                 <button key={fy.id} className={`fy-tab${activeFY===fy.id?" fy-tab-active":""}`} onClick={()=>setActiveFY(fy.id)}>{fy.label}</button>
               ))}
             </div>
-            <button className="btn-ghost" onClick={()=>setShowOwners(true)}>
+            <button className="dark-toggle" onClick={()=>setDarkMode(d=>!d)} title={darkMode?"Switch to light mode":"Switch to dark mode"} style={{background:darkMode?"#334155":"transparent",border:`1.5px solid ${darkMode?"#475569":"#e5e7eb"}`}}>
+              {darkMode?"☀️":"🌙"}
+            </button>
+            <button className="btn-ghost" onClick={()=>setShowOwners(true)} style={{color:darkMode?"#cbd5e1":"#374151",borderColor:darkMode?"#334155":"#e5e7eb",background:darkMode?"transparent":"transparent"}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               <span className="btn-label">Owners</span>
             </button>
@@ -2211,7 +2291,7 @@ function EventTracker() {
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",minWidth:1200}}>
                 <thead>
-                  <tr style={{borderBottom:"1.5px solid #f3f4f6",background:"#fafafa"}}>
+                  <tr style={{borderBottom:"1.5px solid #f3f4f6",background:"#fafafa",position:"sticky",top:62,zIndex:5}}>
                     <th className="th">Ref</th>
                     <th className="th" style={{background:"#fefce8",color:"#a16207"}}>Class</th>
                     <th className="th">Client</th>
@@ -2230,7 +2310,7 @@ function EventTracker() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length===0&&<tr><td colSpan={13} style={{padding:40,textAlign:"center",color:"#9ca3af",fontSize:14}}>No results found.</td></tr>}
+                  {filtered.length===0&&<tr><td colSpan={15}><div className="empty-state"><svg width="80" height="80" viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="38" fill="#f0f0ff" stroke="#e0e7ff" strokeWidth="2"/><rect x="22" y="28" width="36" height="28" rx="4" fill="#e0e7ff"/><rect x="28" y="36" width="24" height="3" rx="1.5" fill="#a5b4fc"/><rect x="28" y="43" width="16" height="3" rx="1.5" fill="#c7d2fe"/><circle cx="56" cy="26" r="8" fill="#6366f1"/><path d="M53 26h6M56 23v6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg><div style={{fontSize:15,fontWeight:700,color:"#4338ca"}}>No events match your filters</div><div style={{fontSize:13,color:"#9ca3af",maxWidth:260}}>Try changing the stage, owner filter, or search term to find what you're looking for.</div></div></td></tr>}
                   {filtered.map(lead=>{
                     const sc=STAGE_COLORS[lead.stage]||STAGE_COLORS["New"];
                     const isTBC=lead.venue?.trim().toUpperCase()==="TBC";
@@ -2267,9 +2347,10 @@ function EventTracker() {
                         <EditCell value={lead.company}   onSave={v=>updateField(lead.id,"company",v)} placeholder="add company"/>
                         <EditCell value={lead.email}     onSave={v=>updateField(lead.id,"email",v)}   type="email" placeholder="add email"/>
                         <EditCell value={lead.value}     onSave={v=>updateField(lead.id,"value",v)}   type="number" placeholder="add value" mono={true}/>
-                        <td style={{padding:"10px 12px",borderLeft:"2px solid #f9fafb"}}>
+                        <td style={{padding:"8px 10px",borderLeft:"2px solid #f9fafb"}}>
                           <select value={lead.stage} onChange={e=>updateStage(lead.id,e.target.value)}
-                            style={{background:sc.bg,color:sc.text,border:"none",borderRadius:999,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",outline:"none"}}>
+                            className="stage-pill"
+                            style={{background:sc.bg,color:sc.text,boxShadow:`inset 0 0 0 1.5px ${sc.dot}33`}}>
                             {STAGES.map(s=><option key={s}>{s}</option>)}
                           </select>
                         </td>
@@ -2307,6 +2388,7 @@ function EventTracker() {
                   })}
                 </tbody>
               </table>
+              {filtered.length>0&&<div className="pipeline-total"><span style={{fontSize:12,fontWeight:500,color:"#6366f1",opacity:.8}}>Pipeline total ({filtered.length} event{filtered.length!==1?"s":""})</span><span style={{fontSize:16,fontWeight:800,letterSpacing:"-.02em"}}>£{pipelineTotal.toLocaleString()}</span></div>}
             </div>
           </div>
         )}
@@ -2327,7 +2409,8 @@ function EventTracker() {
                       <span style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.client}</span>
                     </div>
                     <select value={lead.stage} onChange={e=>updateStage(lead.id,e.target.value)}
-                      style={{background:sc.bg,color:sc.text,border:"none",borderRadius:999,padding:"3px 8px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",outline:"none",flexShrink:0}}>
+                      className="stage-pill"
+                      style={{background:sc.bg,color:sc.text,boxShadow:`inset 0 0 0 1.5px ${sc.dot}33`,flexShrink:0}}>
                       {STAGES.map(s=><option key={s}>{s}</option>)}
                     </select>
                   </div>
