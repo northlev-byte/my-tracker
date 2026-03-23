@@ -33,8 +33,15 @@ function doGet(e) {
     owners = ownersData.flat().filter(o => o !== "");
   }
 
+  const prospectsSheet = ss.getSheetByName("Prospects") || ss.insertSheet("Prospects");
+  let prospects = [];
+  const pCell = prospectsSheet.getRange("A1").getValue();
+  if (pCell && typeof pCell === 'string' && pCell !== '') {
+    try { prospects = JSON.parse(pCell); } catch(_) { prospects = []; }
+  }
+
   const callback = e.parameter.callback;
-  const output = JSON.stringify({ leads, owners });
+  const output = JSON.stringify({ leads, owners, prospects });
   return ContentService
     .createTextOutput(callback ? callback + '(' + output + ')' : output)
     .setMimeType(ContentService.MimeType.JAVASCRIPT);
@@ -101,6 +108,9 @@ function doPost(e) {
   if ((payload.owners || []).length > 0) {
     ownersSheet.getRange(1, 1, payload.owners.length, 1).setValues(payload.owners.map(o => [o]));
   }
+
+  const prospectsSheet = ss.getSheetByName("Prospects") || ss.insertSheet("Prospects");
+  prospectsSheet.getRange("A1").setValue(JSON.stringify(payload.prospects || []));
 
   return ContentService
     .createTextOutput(JSON.stringify({ success: true }))
