@@ -279,6 +279,30 @@ function EditCell({ value, onSave, type="text", placeholder="—", mono=false })
   );
 }
 
+// ── Mini inline edit (div, not td) for merged cells ───────
+function MiniEditField({ value, onSave, type="text", placeholder }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value||"");
+  const ref = useRef();
+  useEffect(()=>{ if(editing) ref.current?.focus(); },[editing]);
+  function commit() { setEditing(false); if(draft!==(value||"")) onSave(draft); }
+  if (editing) return (
+    <input ref={ref} type={type} value={draft}
+      onChange={e=>setDraft(e.target.value)} onBlur={commit}
+      onKeyDown={e=>{ if(e.key==="Enter") commit(); if(e.key==="Escape"){setDraft(value||"");setEditing(false);} }}
+      style={{width:"100%",padding:"2px 5px",border:"1.5px solid #6366f1",borderRadius:4,fontSize:11,outline:"none",background:"#fafafe",fontFamily:"inherit"}}
+    />
+  );
+  return (
+    <div onClick={()=>{setDraft(value||"");setEditing(true);}} title="Click to edit"
+      style={{cursor:"text",lineHeight:1.5,padding:"1px 0"}}>
+      {value
+        ? <span style={{fontSize:11,color:"#374151"}}>{value}</span>
+        : <span style={{fontSize:11,color:"#d1d5db"}}>{placeholder}</span>}
+    </div>
+  );
+}
+
 // ── Date Range Cell ───────────────────────────────────────
 function fmtRange(s, e) {
   if (!s) return null;
@@ -2335,9 +2359,7 @@ function EventTracker() {
                     <th className="th">Date(s)</th>
                     <th className="th">Venue</th>
                     <th className="th">Owner</th>
-                    <th className="th th-lead" style={{borderLeft:"2px solid #ede9fe"}}>Contact</th>
-                    <th className="th th-lead">Company</th>
-                    <th className="th th-lead">Email</th>
+                    <th className="th th-lead" style={{borderLeft:"2px solid #ede9fe"}}>Lead</th>
                     <th className="th th-lead">Value (£)</th>
                     <th className="th" style={{borderLeft:"2px solid #f3f4f6"}}>Stage</th>
                     <th className="th" style={{color:"#f59e0b"}}>⚠️ Clashes</th>
@@ -2346,7 +2368,7 @@ function EventTracker() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length===0&&<tr><td colSpan={15}><div className="empty-state"><svg width="80" height="80" viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="38" fill="#f0f0ff" stroke="#e0e7ff" strokeWidth="2"/><rect x="22" y="28" width="36" height="28" rx="4" fill="#e0e7ff"/><rect x="28" y="36" width="24" height="3" rx="1.5" fill="#a5b4fc"/><rect x="28" y="43" width="16" height="3" rx="1.5" fill="#c7d2fe"/><circle cx="56" cy="26" r="8" fill="#6366f1"/><path d="M53 26h6M56 23v6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg><div style={{fontSize:15,fontWeight:700,color:"#4338ca"}}>No events match your filters</div><div style={{fontSize:13,color:"#9ca3af",maxWidth:260}}>Try changing the stage, owner filter, or search term to find what you're looking for.</div></div></td></tr>}
+                  {filtered.length===0&&<tr><td colSpan={13}><div className="empty-state"><svg width="80" height="80" viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="38" fill="#f0f0ff" stroke="#e0e7ff" strokeWidth="2"/><rect x="22" y="28" width="36" height="28" rx="4" fill="#e0e7ff"/><rect x="28" y="36" width="24" height="3" rx="1.5" fill="#a5b4fc"/><rect x="28" y="43" width="16" height="3" rx="1.5" fill="#c7d2fe"/><circle cx="56" cy="26" r="8" fill="#6366f1"/><path d="M53 26h6M56 23v6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg><div style={{fontSize:15,fontWeight:700,color:"#4338ca"}}>No events match your filters</div><div style={{fontSize:13,color:"#9ca3af",maxWidth:260}}>Try changing the stage, owner filter, or search term to find what you're looking for.</div></div></td></tr>}
                   {filtered.map(lead=>{
                     const sc=STAGE_COLORS[lead.stage]||STAGE_COLORS["New"];
                     const isTBC=lead.venue?.trim().toUpperCase()==="TBC";
@@ -2377,11 +2399,11 @@ function EventTracker() {
                             {(owners||[]).map(o=><option key={o}>{o}</option>)}
                           </select>
                         </td>
-                        <td style={{borderLeft:"2px solid #f5f3ff",padding:0}}>
-                          <EditCell value={lead.name}    onSave={v=>updateField(lead.id,"name",v)}    placeholder="add contact"/>
+                        <td style={{borderLeft:"2px solid #f5f3ff",padding:"6px 8px",minWidth:110}}>
+                          <MiniEditField value={lead.name}    onSave={v=>updateField(lead.id,"name",v)}    placeholder="contact"/>
+                          <MiniEditField value={lead.company} onSave={v=>updateField(lead.id,"company",v)} placeholder="company"/>
+                          <MiniEditField value={lead.email}   onSave={v=>updateField(lead.id,"email",v)}   type="email" placeholder="email"/>
                         </td>
-                        <EditCell value={lead.company}   onSave={v=>updateField(lead.id,"company",v)} placeholder="add company"/>
-                        <EditCell value={lead.email}     onSave={v=>updateField(lead.id,"email",v)}   type="email" placeholder="add email"/>
                         <EditCell value={lead.value}     onSave={v=>updateField(lead.id,"value",v)}   type="number" placeholder="add value" mono={true}/>
                         <td style={{padding:"8px 10px",borderLeft:"2px solid #f9fafb"}}>
                           <select value={lead.stage} onChange={e=>{if(e.target.value==="Closed Won")fireConfetti(e.target);updateStage(lead.id,e.target.value);}}

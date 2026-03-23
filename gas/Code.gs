@@ -16,6 +16,8 @@ function doGet(e) {
           const m = String(val.getMonth() + 1).padStart(2, '0');
           const d = String(val.getDate()).padStart(2, '0');
           obj[h] = `${y}-${m}-${d}`;
+        } else if (h === 'files' && typeof val === 'string' && val !== '') {
+          try { obj[h] = JSON.parse(val); } catch(_) { obj[h] = []; }
         } else {
           obj[h] = val;
         }
