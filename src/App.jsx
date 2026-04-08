@@ -1733,9 +1733,10 @@ function EventTracker() {
         if (Array.isArray(data.leads) && data.leads.length > 0) {
           console.log("[LOAD] raw fields from Sheets (first lead):", Object.keys(data.leads[0] || {}));
           console.log("[LOAD] raw first lead from Sheets:", JSON.parse(JSON.stringify(data.leads[0] || {})));
+          const STAGE_MIGRATE = {"New":"New Enquiry","Contacted":"New Enquiry","Qualified":"New Enquiry","Proposal":"Proposal Sent","Closed Won":"Confirmed"};
           const seen = new Set();
           const sheetLeads = data.leads
-            .map(l=>({...l, files: typeof l.files==="string" ? (() => { try { return JSON.parse(l.files); } catch { return []; } })() : (l.files||[]), classCode:l.classCode||""}))
+            .map(l=>({...l, files: typeof l.files==="string" ? (() => { try { return JSON.parse(l.files); } catch { return []; } })() : (l.files||[]), classCode:l.classCode||"", stage: STAGE_MIGRATE[l.stage]||l.stage||"New Enquiry"}))
             .filter(l=>{ if(seen.has(String(l.id))) return false; seen.add(String(l.id)); return true; });
           console.log("[LOAD] processed first lead (after mapping):", JSON.parse(JSON.stringify(sheetLeads[0] || {})));
           console.log("[LOAD] total leads loaded from Sheets:", sheetLeads.length);
