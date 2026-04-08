@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 
 const PASSWORD = "ConnectinEvents";
 
-const STAGES = ["New", "Contacted", "Qualified", "Proposal", "Closed Won", "Closed Lost"];
+const STAGES = ["New Enquiry", "Proposal Sent", "Confirmed", "Closed Lost"];
 
 // ConnectIn brand confetti colours
 const CONFETTI_COLORS = ["#0d3d2a","#16a34a","#4ade80","#bbf7d0","#fbbf24","#ffffff","#22c55e"];
@@ -42,11 +42,9 @@ function fireConfetti(originEl) {
   }
 }
 const STAGE_COLORS = {
-  "New":         { bg: "#e8f4fd", text: "#1a6fa8", dot: "#3b9edd" },
-  "Contacted":   { bg: "#fff3e0", text: "#b45309",  dot: "#f59e0b" },
-  "Qualified":   { bg: "#f0fdf4", text: "#166534",  dot: "#22c55e" },
-  "Proposal":    { bg: "#faf5ff", text: "#7c3aed",  dot: "#a855f7" },
-  "Closed Won":  { bg: "#dcfce7", text: "#15803d",  dot: "#16a34a" },
+  "New Enquiry":   { bg: "#e8f4fd", text: "#1a6fa8", dot: "#3b9edd" },
+  "Proposal Sent": { bg: "#faf5ff", text: "#7c3aed",  dot: "#a855f7" },
+  "Confirmed":     { bg: "#dcfce7", text: "#15803d",  dot: "#16a34a" },
   "Closed Lost": { bg: "#fef2f2", text: "#dc2626",  dot: "#ef4444" },
 };
 
@@ -98,78 +96,78 @@ const DEFAULT_OWNERS = ["David", "Jordan", "Jess", "Penni", "PP", "David / PP", 
 const SHEET_URL = "/api/proxy";
 
 const REAL_DATA = [
-  { id: 1,  client:"ANS",                  event:"Amplify",                          ref:"124", date:"2026-03-05", venue:"Office",               assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 2,  client:"ANS",                  event:"Customer Event March",             ref:"122", date:"2026-03-12", venue:"The Londoner",          assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 3,  client:"Brazen",               event:"Manchester Airport",               ref:"169", date:"2026-03-18", venue:"CO-OP Live",            assignee:"Penni",         stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 4,  client:"COC",                  event:"Joe Gallagher Speaker",            ref:"167", date:"2026-03-26", venue:"MCR",                   assignee:"David / PP",    stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 5,  client:"Herbalife",            event:"Nutrition Club",                   ref:"151", date:"2026-04-17", venue:"TBC",                   assignee:"Jess",          stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 6,  client:"Guinness Partnerships",event:"North Roadshow",                   ref:"208", date:"2026-05-01", venue:"Manchester Central",    assignee:"David",         stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 7,  client:"Women In Property",    event:"Summit",                           ref:"140", date:"2026-04-23", venue:"Lowry Hotel",           assignee:"Jordan/PP",     stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 8,  client:"Godel Technologies",   event:"Customer Event April",             ref:"206", date:"2026-04-30", venue:"Cloud 23",              assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 9,  client:"CPC",                  event:"Digital Supplier Conference",      ref:"177", date:"2026-05-01", venue:"TBC",                   assignee:"David",         stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 10, client:"Wates",                event:"Brighton",                         ref:"137", date:"2026-05-06", venue:"TBC",                   assignee:"Jess/PP",       stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 11, client:"ANS",                  event:"Presidents Club 26",               ref:"181", date:"2026-05-12", venue:"Marrakesh",             assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 12, client:"Beaver Trust",         event:"Beaver Conference",                ref:"105", date:"2026-05-20", venue:"Civic Centre Newcastle", assignee:"Jordan",       stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 13, client:"DBD",                  event:"Spring Party",                     ref:"178", date:"2026-05-23", venue:"Springfield Farm",      assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 14, client:"Diecast",              event:"Youth Foundation Ball",            ref:"143", date:"2026-06-04", venue:"Diecast",               assignee:"PP",            stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 15, client:"One Manchester",       event:"OM Fest 4.0",                      ref:"200", date:"2026-06-12", venue:"Quattro House",         assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 16, client:"Vehicle Consulting",   event:"Golf Day at Styal Golf Club",      ref:"195", date:"2026-06-17", venue:"Styal Golf Club",       assignee:"David",         stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 17, client:"Ignite",               event:"Hive Installer Show",              ref:"189", date:"2026-06-21", venue:"NEC Birmingham",        assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 18, client:"Housing Conference",   event:"Fusion 21",                        ref:"133", date:"2026-06-23", venue:"Impossible",            assignee:"Jordan/PP",     stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 19, client:"Housing Conference",   event:"Novus",                            ref:"132", date:"2026-06-23", venue:"TBC",                   assignee:"Jordan/PP",     stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 20, client:"Housing Conference",   event:"Housing Rocks",                    ref:"134", date:"2026-06-24", venue:"Impossible",            assignee:"Jordan/PP",     stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 21, client:"Housing Conference",   event:"Wates",                            ref:"131", date:"2026-06-24", venue:"Deansgate Manchester",  assignee:"Jordan/PP",     stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 22, client:"CPC",                  event:"CPC Supplier Expo",                ref:"176", date:"2026-06-26", venue:"Lowry Hotel",           assignee:"David",         stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 23, client:"Vehicle Consulting",   event:"Away Day",                         ref:"172", date:"2026-06-26", venue:"TBC",                   assignee:"David",         stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 24, client:"Oliver James",         event:"Summer Party 26",                  ref:"175", date:"2026-07-03", venue:"20 Stories",            assignee:"David",         stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 25, client:"DBD",                  event:"Summer Party 26",                  ref:"192", date:"2026-07-09", venue:"Liverpool or MCR",      assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 26, client:"Fournet",              event:"Staff Conference and Summer Party", ref:"202", date:"2026-07-09", venue:"TBC",                  assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 27, client:"Tpas",                 event:"Conference",                       ref:"106", date:"2026-07-13", venue:"EMCC",                  assignee:"Jordan/David",  stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 28, client:"Ric Moylan",           event:"Reset Conference 26",              ref:"199", date:"2026-07-14", venue:"Lowry Hotel",           assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 29, client:"PXC",                  event:"Summer Party 26",                  ref:"203", date:"2026-07-19", venue:"TBC",                   assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 30, client:"CIH",                  event:"Fusion 21",                        ref:"198", date:"2026-09-05", venue:"TBC",                   assignee:"Penni",         stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 31, client:"Worldline",            event:"Wordfest 26",                      ref:"158", date:"2026-09-05", venue:"The Bond",              assignee:"Jess",          stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 32, client:"CIH",                  event:"Novus",                            ref:"136", date:"2026-09-08", venue:"Daffodil",              assignee:"PP",            stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 33, client:"CIH",                  event:"Wates",                            ref:"135", date:"2026-09-08", venue:"TBC",                   assignee:"PP",            stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 34, client:"CIH",                  event:"Wish",                             ref:"190", date:"2026-09-08", venue:"TBC",                   assignee:"Penni",         stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 35, client:"Dr Oetker",            event:"Brand Planning 26",                ref:"180", date:"2026-09-17", venue:"Diecast",               assignee:"David / PP",    stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 36, client:"Ignite",               event:"Screwfix Live 26",                 ref:"182", date:"2026-09-23", venue:"Farnborough",           assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 37, client:"Herbalife",            event:"Nutrition Club 2",                 ref:"152", date:"2026-09-25", venue:"TBC",                   assignee:"Jess",          stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 38, client:"Ric Moylan",           event:"CBN 26",                           ref:"126", date:"2026-10-03", venue:"Manchester Deansgate",  assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 39, client:"Women In Property",    event:"Annual Dinner 26",                 ref:"127", date:"2026-10-08", venue:"VW",                    assignee:"Jordan/PP",     stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 40, client:"Kids Planet",          event:"Staff Awards",                     ref:"191", date:"2026-10-10", venue:"The Point",             assignee:"PP",            stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 41, client:"Jobs Not Yet Won",     event:"Black Tie Darts",                  ref:"107", date:"2026-10-22", venue:"Hilton",                assignee:"David / Jordan", stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 42, client:"DBD",                  event:"Halloween Party",                  ref:"179", date:"2026-10-30", venue:"Springfield Farm",      assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 43, client:"Onward",               event:"Colleague Conference 26",          ref:"153", date:"2026-11-06", venue:"Manchester Central",    assignee:"David",         stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 44, client:"Torus",                event:"Annual Conference 26",             ref:"129", date:"2026-11-18", venue:"Boxpark",               assignee:"Jordan/PP",     stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 45, client:"Birtenshaw",           event:"Annual Dinner 26",                 ref:"144", date:"2026-11-21", venue:"Manchester Deansgate",  assignee:"PP",            stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 46, client:"UKCF",                 event:"Annual Conference 26",             ref:"128", date:"2026-11-24", venue:"EMMC",                  assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 47, client:"Incommunities",        event:"Colleague Conference 26",          ref:"174", date:"2026-12-03", venue:"Bradford Live",         assignee:"David",         stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 48, client:"Fournet",              event:"Christmas Party 26",               ref:"197", date:"2026-12-04", venue:"Cloud 23",              assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 49, client:"Fusion 21",            event:"Christmas Party 26",               ref:"185", date:"2026-12-04", venue:"Treehouse Hotel",       assignee:"Penni",         stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 50, client:"Canford Law",          event:"Christmas Party 26",               ref:"209", date:"2026-12-05", venue:"TBC",                   assignee:"David",         stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id: 51, client:"PXC",                  event:"Christmas Party 26",               ref:"194", date:"2026-12-16", venue:"TBC",                   assignee:"Jordan",        stage:"Qualified", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:211,  client:"Bathshack",           event:"Launch Event",                        ref:"TBC",  date:"2026-05-01", venue:"TBC",                  assignee:"Jess",   stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:212,  client:"Princes",               event:"Activation",                          ref:"TBC",  date:"2026-05-01", venue:"TBC",                  assignee:"Jess",   stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:213,  client:"Este Medical Group",    event:"Padel Brand Activation",              ref:"TBC",  date:"2026-04-14", venue:"TBC",                  assignee:"Jess",   stage:"New", name:"Lucy Melling", company:"Scene Agency", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:214,  client:"Bacardi",               event:"Brand Conference",                    ref:"TBC",  date:"2026-04-23", venue:"TBC",                  assignee:"Penni",  stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:215,  client:"BGN",                   event:"Geneva Event",                        ref:"TBC",  date:"2026-05-01", venue:"Geneva",               assignee:"Jordan", stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:216,  client:"Herbalife",             event:"Extravaganza Friday",                 ref:"TBC",  date:"2026-06-26", venue:"Krakow",               assignee:"Jess",   stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:217,  client:"Vinci",                 event:"Team Building",                       ref:"TBC",  date:"2026-09-07", venue:"TBC",                  assignee:"Georgie",stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:218,  client:"WIP Central",           event:"Annual Dinner",                       ref:"TBC",  date:"2026-10-29", venue:"TBC",                  assignee:"Penni",  stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:219,  client:"Aldermore",             event:"Colleague Conference & Awards",       ref:"TBC",  date:"2026-12-01", venue:"TBC",                  assignee:"Penni",  stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:220,  client:"TP Bennett",            event:"Traitors Event",                      ref:"TBC",  date:"2026-12-17", venue:"TBC",                  assignee:"Georgie",stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:221,  client:"Oliver James",          event:"Christmas Event",                     ref:"TBC",  date:"2026-12-03", venue:"Treehouse",            assignee:"David",  stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:222,  client:"Worldline",             event:"Tech Conference",                     ref:"TBC",  date:"2026-07-01", venue:"TBC",                  assignee:"Jess",   stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:223,  client:"Kids Planet",           event:"Managers Conference",                 ref:"TBC",  date:"2027-01-01", venue:"TBC",                  assignee:"Penni",  stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:224,  client:"Novus",                 event:"Awards",                              ref:"TBC",  date:"2027-01-28", venue:"The Treehouse",        assignee:"Jordan", stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:225,  client:"Sovini Housing",        event:"Event",                               ref:"TBC",  date:"2027-02-01", venue:"TBC",                  assignee:"Penni",  stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:226,  client:"Girls Out Loud",        event:"Event",                               ref:"TBC",  date:"2027-03-03", venue:"Hilton",               assignee:"Penni",  stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
-  { id:227,  client:"City Of Champions",     event:"Event",                               ref:"TBC",  date:"2027-03-15", venue:"TBC",                  assignee:"Penni",  stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 1,  client:"ANS",                  event:"Amplify",                          ref:"124", date:"2026-03-05", venue:"Office",               assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 2,  client:"ANS",                  event:"Customer Event March",             ref:"122", date:"2026-03-12", venue:"The Londoner",          assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 3,  client:"Brazen",               event:"Manchester Airport",               ref:"169", date:"2026-03-18", venue:"CO-OP Live",            assignee:"Penni",         stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 4,  client:"COC",                  event:"Joe Gallagher Speaker",            ref:"167", date:"2026-03-26", venue:"MCR",                   assignee:"David / PP",    stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 5,  client:"Herbalife",            event:"Nutrition Club",                   ref:"151", date:"2026-04-17", venue:"TBC",                   assignee:"Jess",          stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 6,  client:"Guinness Partnerships",event:"North Roadshow",                   ref:"208", date:"2026-05-01", venue:"Manchester Central",    assignee:"David",         stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 7,  client:"Women In Property",    event:"Summit",                           ref:"140", date:"2026-04-23", venue:"Lowry Hotel",           assignee:"Jordan/PP",     stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 8,  client:"Godel Technologies",   event:"Customer Event April",             ref:"206", date:"2026-04-30", venue:"Cloud 23",              assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 9,  client:"CPC",                  event:"Digital Supplier Conference",      ref:"177", date:"2026-05-01", venue:"TBC",                   assignee:"David",         stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 10, client:"Wates",                event:"Brighton",                         ref:"137", date:"2026-05-06", venue:"TBC",                   assignee:"Jess/PP",       stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 11, client:"ANS",                  event:"Presidents Club 26",               ref:"181", date:"2026-05-12", venue:"Marrakesh",             assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 12, client:"Beaver Trust",         event:"Beaver Conference",                ref:"105", date:"2026-05-20", venue:"Civic Centre Newcastle", assignee:"Jordan",       stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 13, client:"DBD",                  event:"Spring Party",                     ref:"178", date:"2026-05-23", venue:"Springfield Farm",      assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 14, client:"Diecast",              event:"Youth Foundation Ball",            ref:"143", date:"2026-06-04", venue:"Diecast",               assignee:"PP",            stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 15, client:"One Manchester",       event:"OM Fest 4.0",                      ref:"200", date:"2026-06-12", venue:"Quattro House",         assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 16, client:"Vehicle Consulting",   event:"Golf Day at Styal Golf Club",      ref:"195", date:"2026-06-17", venue:"Styal Golf Club",       assignee:"David",         stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 17, client:"Ignite",               event:"Hive Installer Show",              ref:"189", date:"2026-06-21", venue:"NEC Birmingham",        assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 18, client:"Housing Conference",   event:"Fusion 21",                        ref:"133", date:"2026-06-23", venue:"Impossible",            assignee:"Jordan/PP",     stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 19, client:"Housing Conference",   event:"Novus",                            ref:"132", date:"2026-06-23", venue:"TBC",                   assignee:"Jordan/PP",     stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 20, client:"Housing Conference",   event:"Housing Rocks",                    ref:"134", date:"2026-06-24", venue:"Impossible",            assignee:"Jordan/PP",     stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 21, client:"Housing Conference",   event:"Wates",                            ref:"131", date:"2026-06-24", venue:"Deansgate Manchester",  assignee:"Jordan/PP",     stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 22, client:"CPC",                  event:"CPC Supplier Expo",                ref:"176", date:"2026-06-26", venue:"Lowry Hotel",           assignee:"David",         stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 23, client:"Vehicle Consulting",   event:"Away Day",                         ref:"172", date:"2026-06-26", venue:"TBC",                   assignee:"David",         stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 24, client:"Oliver James",         event:"Summer Party 26",                  ref:"175", date:"2026-07-03", venue:"20 Stories",            assignee:"David",         stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 25, client:"DBD",                  event:"Summer Party 26",                  ref:"192", date:"2026-07-09", venue:"Liverpool or MCR",      assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 26, client:"Fournet",              event:"Staff Conference and Summer Party", ref:"202", date:"2026-07-09", venue:"TBC",                  assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 27, client:"Tpas",                 event:"Conference",                       ref:"106", date:"2026-07-13", venue:"EMCC",                  assignee:"Jordan/David",  stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 28, client:"Ric Moylan",           event:"Reset Conference 26",              ref:"199", date:"2026-07-14", venue:"Lowry Hotel",           assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 29, client:"PXC",                  event:"Summer Party 26",                  ref:"203", date:"2026-07-19", venue:"TBC",                   assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 30, client:"CIH",                  event:"Fusion 21",                        ref:"198", date:"2026-09-05", venue:"TBC",                   assignee:"Penni",         stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 31, client:"Worldline",            event:"Wordfest 26",                      ref:"158", date:"2026-09-05", venue:"The Bond",              assignee:"Jess",          stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 32, client:"CIH",                  event:"Novus",                            ref:"136", date:"2026-09-08", venue:"Daffodil",              assignee:"PP",            stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 33, client:"CIH",                  event:"Wates",                            ref:"135", date:"2026-09-08", venue:"TBC",                   assignee:"PP",            stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 34, client:"CIH",                  event:"Wish",                             ref:"190", date:"2026-09-08", venue:"TBC",                   assignee:"Penni",         stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 35, client:"Dr Oetker",            event:"Brand Planning 26",                ref:"180", date:"2026-09-17", venue:"Diecast",               assignee:"David / PP",    stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 36, client:"Ignite",               event:"Screwfix Live 26",                 ref:"182", date:"2026-09-23", venue:"Farnborough",           assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 37, client:"Herbalife",            event:"Nutrition Club 2",                 ref:"152", date:"2026-09-25", venue:"TBC",                   assignee:"Jess",          stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 38, client:"Ric Moylan",           event:"CBN 26",                           ref:"126", date:"2026-10-03", venue:"Manchester Deansgate",  assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 39, client:"Women In Property",    event:"Annual Dinner 26",                 ref:"127", date:"2026-10-08", venue:"VW",                    assignee:"Jordan/PP",     stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 40, client:"Kids Planet",          event:"Staff Awards",                     ref:"191", date:"2026-10-10", venue:"The Point",             assignee:"PP",            stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 41, client:"Jobs Not Yet Won",     event:"Black Tie Darts",                  ref:"107", date:"2026-10-22", venue:"Hilton",                assignee:"David / Jordan", stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 42, client:"DBD",                  event:"Halloween Party",                  ref:"179", date:"2026-10-30", venue:"Springfield Farm",      assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 43, client:"Onward",               event:"Colleague Conference 26",          ref:"153", date:"2026-11-06", venue:"Manchester Central",    assignee:"David",         stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 44, client:"Torus",                event:"Annual Conference 26",             ref:"129", date:"2026-11-18", venue:"Boxpark",               assignee:"Jordan/PP",     stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 45, client:"Birtenshaw",           event:"Annual Dinner 26",                 ref:"144", date:"2026-11-21", venue:"Manchester Deansgate",  assignee:"PP",            stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 46, client:"UKCF",                 event:"Annual Conference 26",             ref:"128", date:"2026-11-24", venue:"EMMC",                  assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 47, client:"Incommunities",        event:"Colleague Conference 26",          ref:"174", date:"2026-12-03", venue:"Bradford Live",         assignee:"David",         stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 48, client:"Fournet",              event:"Christmas Party 26",               ref:"197", date:"2026-12-04", venue:"Cloud 23",              assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 49, client:"Fusion 21",            event:"Christmas Party 26",               ref:"185", date:"2026-12-04", venue:"Treehouse Hotel",       assignee:"Penni",         stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 50, client:"Canford Law",          event:"Christmas Party 26",               ref:"209", date:"2026-12-05", venue:"TBC",                   assignee:"David",         stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id: 51, client:"PXC",                  event:"Christmas Party 26",               ref:"194", date:"2026-12-16", venue:"TBC",                   assignee:"Jordan",        stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:211,  client:"Bathshack",           event:"Launch Event",                        ref:"TBC",  date:"2026-05-01", venue:"TBC",                  assignee:"Jess",   stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:212,  client:"Princes",               event:"Activation",                          ref:"TBC",  date:"2026-05-01", venue:"TBC",                  assignee:"Jess",   stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:213,  client:"Este Medical Group",    event:"Padel Brand Activation",              ref:"TBC",  date:"2026-04-14", venue:"TBC",                  assignee:"Jess",   stage:"New Enquiry", name:"Lucy Melling", company:"Scene Agency", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:214,  client:"Bacardi",               event:"Brand Conference",                    ref:"TBC",  date:"2026-04-23", venue:"TBC",                  assignee:"Penni",  stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:215,  client:"BGN",                   event:"Geneva Event",                        ref:"TBC",  date:"2026-05-01", venue:"Geneva",               assignee:"Jordan", stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:216,  client:"Herbalife",             event:"Extravaganza Friday",                 ref:"TBC",  date:"2026-06-26", venue:"Krakow",               assignee:"Jess",   stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:217,  client:"Vinci",                 event:"Team Building",                       ref:"TBC",  date:"2026-09-07", venue:"TBC",                  assignee:"Georgie",stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:218,  client:"WIP Central",           event:"Annual Dinner",                       ref:"TBC",  date:"2026-10-29", venue:"TBC",                  assignee:"Penni",  stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:219,  client:"Aldermore",             event:"Colleague Conference & Awards",       ref:"TBC",  date:"2026-12-01", venue:"TBC",                  assignee:"Penni",  stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:220,  client:"TP Bennett",            event:"Traitors Event",                      ref:"TBC",  date:"2026-12-17", venue:"TBC",                  assignee:"Georgie",stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:221,  client:"Oliver James",          event:"Christmas Event",                     ref:"TBC",  date:"2026-12-03", venue:"Treehouse",            assignee:"David",  stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:222,  client:"Worldline",             event:"Tech Conference",                     ref:"TBC",  date:"2026-07-01", venue:"TBC",                  assignee:"Jess",   stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:223,  client:"Kids Planet",           event:"Managers Conference",                 ref:"TBC",  date:"2027-01-01", venue:"TBC",                  assignee:"Penni",  stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:224,  client:"Novus",                 event:"Awards",                              ref:"TBC",  date:"2027-01-28", venue:"The Treehouse",        assignee:"Jordan", stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:225,  client:"Sovini Housing",        event:"Event",                               ref:"TBC",  date:"2027-02-01", venue:"TBC",                  assignee:"Penni",  stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:226,  client:"Girls Out Loud",        event:"Event",                               ref:"TBC",  date:"2027-03-03", venue:"Hilton",               assignee:"Penni",  stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
+  { id:227,  client:"City Of Champions",     event:"Event",                               ref:"TBC",  date:"2027-03-15", venue:"TBC",                  assignee:"Penni",  stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" },
 
 ];
 
-const emptyForm = { client:"", event:"", ref:"", date:"", endDate:"", venue:"", assignee:"", stage:"New", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" };
+const emptyForm = { client:"", event:"", ref:"", date:"", endDate:"", venue:"", assignee:"", stage:"New Enquiry", name:"", company:"", email:"", value:"", notes:"", files:[], classCode:"" };
 
 // ── Helpers ──────────────────────────────────────────────
 function monthKey(dateStr) { return dateStr ? dateStr.substring(0,7) : null; }
@@ -359,9 +357,9 @@ function MonthlyTracker({ leads, fyMonths }) {
   const monthData = useMemo(()=> fyMonths.map(key => {
     const mc = getMonthColor(key);
     const ml = (leads||[]).filter(l=>monthKey(l.date)===key);
-    const confirmed = ml.filter(l=>l.stage==="Closed Won").reduce((s,l)=>s+Number(l.value||0),0);
-    const warm      = ml.filter(l=>l.stage==="Proposal").reduce((s,l)=>s+Number(l.value||0),0);
-    const cold      = ml.filter(l=>l.stage==="New").reduce((s,l)=>s+Number(l.value||0),0);
+    const confirmed = ml.filter(l=>l.stage==="Confirmed").reduce((s,l)=>s+Number(l.value||0),0);
+    const warm      = ml.filter(l=>l.stage==="Proposal Sent").reduce((s,l)=>s+Number(l.value||0),0);
+    const cold      = ml.filter(l=>l.stage==="New Enquiry").reduce((s,l)=>s+Number(l.value||0),0);
     const total     = confirmed+warm+cold;
     const BAR_MAX    = 200000;
     const confirmedH= Math.round(Math.min(confirmed,BAR_MAX)/BAR_MAX*100);
@@ -618,7 +616,7 @@ function CalendarView({ leads, onEventClick, holidays=[], recontacts=[] }) {
                   }}>{dayNum}</div>
                   {events.slice(0,MAX_SHOW).map(lead=>{
                     const mc = getMonthColor(monthKey(lead.date));
-                    const sc = STAGE_COLORS[lead.stage]||STAGE_COLORS["New"];
+                    const sc = STAGE_COLORS[lead.stage]||STAGE_COLORS["New Enquiry"];
                     return (
                       <div key={lead.id} onClick={()=>onEventClick(lead)}
                         title={`${lead.client} – ${lead.event}\nOwner: ${lead.assignee||"—"}\nStage: ${lead.stage}`}
@@ -872,7 +870,7 @@ function ProspectsTab({ prospects, setProspects, owners, leads, setLeads, setAct
       date: "",
       venue: p.type === "Venue" ? p.name : "",
       assignee: p.assignee,
-      stage: "Proposal",
+      stage: "Proposal Sent",
       name: p.clientName || "",
       company: p.type === "Client" ? p.name : "",
       email: p.clientEmail || "",
@@ -1187,6 +1185,20 @@ function ProspectsTab({ prospects, setProspects, owners, leads, setLeads, setAct
                     Send to Pipeline
                   </button>
                 )}
+                {!editing && (
+                  <button onClick={() => {
+                    const subject = encodeURIComponent(`Follow up: ${p.name}`);
+                    const body = encodeURIComponent([p.notes, p.phone ? `Phone: ${p.phone}` : ""].filter(Boolean).join("\n"));
+                    const now = new Date(); now.setHours(now.getHours()+1,0,0,0);
+                    const end = new Date(now); end.setHours(end.getHours()+1);
+                    const fmt = d => d.toISOString().slice(0,16);
+                    window.open(`https://outlook.office.com/calendar/action/compose?subject=${subject}&startdt=${fmt(now)}&enddt=${fmt(end)}&body=${body}`, "_blank");
+                  }}
+                    style={{ background: "#fff", color: "#0078d4", border: "1.5px solid #0078d4", borderRadius: 7, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0078d4" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                    Add to Calendar
+                  </button>
+                )}
                 <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
                   {editing ? (
                     <>
@@ -1317,21 +1329,21 @@ function autoDetectFields(headers) {
 }
 
 const DEFAULT_STAGE_MAP = {
-  "closedwon":  "Closed Won",
-  "closed won": "Closed Won",
-  "won":        "Closed Won",
-  "proposal":   "Proposal",
-  "proposaldelivered": "Proposal",
-  "proposal delivered": "Proposal",
-  "presentation": "Proposal",
+  "closedwon":  "Confirmed",
+  "closed won": "Confirmed",
+  "won":        "Confirmed",
+  "proposal":   "Proposal Sent",
+  "proposaldelivered": "Proposal Sent",
+  "proposal delivered": "Proposal Sent",
+  "presentation": "Proposal Sent",
   "qualified":  "New",
   "new":        "New",
   "appointmentscheduled": "New",
   "appointment scheduled": "New",
   "contacted":  "New",
-  "decisionmakerboughtin": "Proposal",
-  "contractsent": "Proposal",
-  "contract sent": "Proposal",
+  "decisionmakerboughtin": "Proposal Sent",
+  "contractsent": "Proposal Sent",
+  "contract sent": "Proposal Sent",
 };
 
 function mapStage(rawStage, customMap) {
@@ -1426,9 +1438,9 @@ function HubSpotTab({ leads, setLeads, owners }) {
     }));
     setLeads(l=>[...(l||[]), ...newLeads]);
     setImportResult({ count: newLeads.length, byStage: {
-      "Closed Won": newLeads.filter(x=>x.stage==="Closed Won").length,
-      "Proposal":   newLeads.filter(x=>x.stage==="Proposal").length,
-      "New":        newLeads.filter(x=>x.stage==="New").length,
+      "Confirmed":     newLeads.filter(x=>x.stage==="Confirmed").length,
+      "Proposal Sent": newLeads.filter(x=>x.stage==="Proposal Sent").length,
+      "New Enquiry":   newLeads.filter(x=>x.stage==="New Enquiry").length,
     }});
     setCsvData(null); setCsvHeaders([]); setPreview(null); setSelected(new Set());
   }
@@ -1466,7 +1478,7 @@ function HubSpotTab({ leads, setLeads, owners }) {
           {importResult&&(
             <div style={{background:"#f0fdf4",border:"1.5px solid #86efac",borderRadius:12,padding:"16px 20px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
               <span style={{fontSize:15,fontWeight:700,color:"#15803d"}}>✓ {importResult.count} deal{importResult.count!==1?"s":""} imported</span>
-              <span style={{fontSize:12,color:"#16a34a"}}>Confirmed: {importResult.byStage["Closed Won"]} · Warm: {importResult.byStage["Proposal"]} · Cold: {importResult.byStage["New"]}</span>
+              <span style={{fontSize:12,color:"#16a34a"}}>Confirmed: {importResult.byStage["Confirmed"]} · Warm: {importResult.byStage["Proposal Sent"]} · Cold: {importResult.byStage["New Enquiry"]}</span>
               <button onClick={()=>setImportResult(null)} style={{marginLeft:"auto",background:"none",border:"none",color:"#9ca3af",cursor:"pointer",fontSize:18,lineHeight:1}}>×</button>
             </div>
           )}
@@ -1524,15 +1536,15 @@ function HubSpotTab({ leads, setLeads, owners }) {
               {/* Stats bar */}
               <div style={{padding:"12px 20px",background:"#f9fafb",borderBottom:"1px solid #e5e7eb",display:"flex",gap:20,alignItems:"center",flexWrap:"wrap"}}>
                 <span style={{fontSize:13,fontWeight:700,color:"#111827"}}>{mappedPreview.length} deals found</span>
-                <span style={{fontSize:12,color:"#16a34a",fontWeight:600}}>✓ {mappedPreview.filter(r=>r.stage==="Closed Won").length} confirmed</span>
-                <span style={{fontSize:12,color:"#a855f7",fontWeight:600}}>~ {mappedPreview.filter(r=>r.stage==="Proposal").length} warm</span>
-                <span style={{fontSize:12,color:"#06b6d4",fontWeight:600}}>· {mappedPreview.filter(r=>r.stage==="New").length} cold</span>
+                <span style={{fontSize:12,color:"#16a34a",fontWeight:600}}>✓ {mappedPreview.filter(r=>r.stage==="Confirmed").length} confirmed</span>
+                <span style={{fontSize:12,color:"#a855f7",fontWeight:600}}>~ {mappedPreview.filter(r=>r.stage==="Proposal Sent").length} warm</span>
+                <span style={{fontSize:12,color:"#06b6d4",fontWeight:600}}>· {mappedPreview.filter(r=>r.stage==="New Enquiry").length} cold</span>
                 <span style={{fontSize:12,color:"#ef4444",fontWeight:600}}>⚠ {mappedPreview.filter(r=>r._duplicate).length} duplicates (will skip)</span>
                 <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center"}}>
                   <select className="form-input" style={{width:"auto",fontSize:12,padding:"5px 10px"}} value={stageFilter} onChange={e=>setStageFilter(e.target.value)}>
                     <option value="All">All stages</option>
-                    <option value="Closed Won">Confirmed</option>
-                    <option value="Proposal">Warm</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Proposal Sent">Warm</option>
                     <option value="New">Cold</option>
                   </select>
                   <button className="btn-ghost" style={{fontSize:12,padding:"5px 10px"}} onClick={()=>{ setCsvData(null); setCsvHeaders([]); setPreview(null); }}>← Re-upload</button>
@@ -1561,7 +1573,7 @@ function HubSpotTab({ leads, setLeads, owners }) {
                         <td style={{padding:"8px 12px",fontSize:12,color:"#6b7280",whiteSpace:"nowrap"}}>{row.date||"—"}</td>
                         <td style={{padding:"8px 12px",fontSize:12,fontFamily:"'DM Mono',monospace",color:"#111827"}}>{row.value>0?`£${row.value.toLocaleString()}`:"—"}</td>
                         <td style={{padding:"8px 12px"}}>
-                          <span style={{fontSize:11,fontWeight:700,borderRadius:999,padding:"2px 8px",background:row.stage==="Closed Won"?"#dcfce7":row.stage==="Proposal"?"#faf5ff":"#e8f4fd",color:row.stage==="Closed Won"?"#15803d":row.stage==="Proposal"?"#7c3aed":"#1a6fa8"}}>{row.stage}</span>
+                          <span style={{fontSize:11,fontWeight:700,borderRadius:999,padding:"2px 8px",background:row.stage==="Confirmed"?"#dcfce7":row.stage==="Proposal Sent"?"#faf5ff":"#e8f4fd",color:row.stage==="Confirmed"?"#15803d":row.stage==="Proposal Sent"?"#7c3aed":"#1a6fa8"}}>{row.stage}</span>
                         </td>
                         <td style={{padding:"8px 12px",fontSize:12,color:"#6b7280"}}>{row.assignee||"—"}</td>
                         <td style={{padding:"8px 12px",fontSize:11,color:row._duplicate?"#ef4444":"#d1fae5",fontWeight:700}}>{row._duplicate?"DUP":"✓"}</td>
@@ -1600,8 +1612,8 @@ function HubSpotTab({ leads, setLeads, owners }) {
                 <select value={customStageMap[stage]||""} onChange={e=>setCustomStageMap(m=>({...m,[stage]:e.target.value}))}
                   style={{fontSize:12,padding:"4px 8px",border:"1.5px solid #e5e7eb",borderRadius:6,color:"#111827",fontFamily:"inherit",minWidth:130}}>
                   <option value="">Auto-detect</option>
-                  <option value="Closed Won">✓ Confirmed</option>
-                  <option value="Proposal">~ Warm</option>
+                  <option value="Confirmed">✓ Confirmed</option>
+                  <option value="Proposal Sent">~ Warm</option>
                   <option value="New">· Cold</option>
                   <option value="Closed Lost">✗ Closed Lost</option>
                 </select>
@@ -1866,10 +1878,10 @@ function EventTracker() {
     return l;
   },[fyLeads,search,filterStage,filterAssignee,sortBy]);
 
-  const confirmedVal = fyLeads.filter(l=>l.stage==="Closed Won").reduce((s,l)=>s+Number(l.value||0),0);
+  const confirmedVal = fyLeads.filter(l=>l.stage==="Confirmed").reduce((s,l)=>s+Number(l.value||0),0);
   const pipelineTotal = filtered.reduce((s,l)=>s+Number(l.value||0),0);
-  const warmVal      = fyLeads.filter(l=>l.stage==="Proposal").reduce((s,l)=>s+Number(l.value||0),0);
-  const coldVal      = fyLeads.filter(l=>l.stage==="New").reduce((s,l)=>s+Number(l.value||0),0);
+  const warmVal      = fyLeads.filter(l=>l.stage==="Proposal Sent").reduce((s,l)=>s+Number(l.value||0),0);
+  const coldVal      = fyLeads.filter(l=>l.stage==="New Enquiry").reduce((s,l)=>s+Number(l.value||0),0);
   const tbcCount     = fyLeads.filter(l=>l.venue?.trim().toUpperCase()==="TBC").length;
 
   function updateField(id,field,val) { setLeads(l=>l.map(x=>x.id===id?{...x,[field]:val}:x)); }
@@ -2247,7 +2259,7 @@ function EventTracker() {
                         {lead.recontactDate&&<div style={{fontSize:9,color:"#b45309",marginTop:2,fontWeight:600}}>📞 On calendar</div>}
                       </td>
                       <td style={{padding:"10px 12px"}}>
-                        <button onClick={()=>updateStage(lead.id,"Qualified")} style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:6,padding:"3px 8px",fontSize:11,color:"#15803d",cursor:"pointer",fontWeight:600,fontFamily:"inherit",whiteSpace:"nowrap"}}>↩ Restore</button>
+                        <button onClick={()=>updateStage(lead.id,"New Enquiry")} style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:6,padding:"3px 8px",fontSize:11,color:"#15803d",cursor:"pointer",fontWeight:600,fontFamily:"inherit",whiteSpace:"nowrap"}}>↩ Restore</button>
                       </td>
                     </tr>
                   ))}
@@ -2268,7 +2280,7 @@ function EventTracker() {
             {label:"Confirmed",     value:confirmedVal?`£${confirmedVal.toLocaleString()}`:"—",          icon:"✅",color:"#15803d",bg:"#f0fdf4"},
             {label:"Warm Pipeline", value:warmVal?`£${warmVal.toLocaleString()}`:"—",                    icon:"🔥",color:"#7c3aed",bg:"#faf5ff"},
             {label:"Cold Pipeline", value:coldVal?`£${coldVal.toLocaleString()}`:"—",                    icon:"❄️",color:"#0e7490",bg:"#ecfeff"},
-            {label:"In Progress",   value:fyLeads.filter(l=>!["Closed Won","Closed Lost"].includes(l.stage)).length,icon:"🔄",color:"#111827",bg:"#fff"},
+            {label:"In Progress",   value:fyLeads.filter(l=>!["Confirmed","Closed Lost"].includes(l.stage)).length,icon:"🔄",color:"#111827",bg:"#fff"},
             {label:"Venue TBC",     value:tbcCount,                                                      icon:"📍",color:"#b45309",bg:"#fff3e0"},
           ].map(s=>(
             <div key={s.label} className="stat-card" style={{background:s.bg}}>
@@ -2370,7 +2382,7 @@ function EventTracker() {
                 <tbody>
                   {filtered.length===0&&<tr><td colSpan={13}><div className="empty-state"><svg width="80" height="80" viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="38" fill="#f0f0ff" stroke="#e0e7ff" strokeWidth="2"/><rect x="22" y="28" width="36" height="28" rx="4" fill="#e0e7ff"/><rect x="28" y="36" width="24" height="3" rx="1.5" fill="#a5b4fc"/><rect x="28" y="43" width="16" height="3" rx="1.5" fill="#c7d2fe"/><circle cx="56" cy="26" r="8" fill="#6366f1"/><path d="M53 26h6M56 23v6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg><div style={{fontSize:15,fontWeight:700,color:"#4338ca"}}>No events match your filters</div><div style={{fontSize:13,color:"#9ca3af",maxWidth:260}}>Try changing the stage, owner filter, or search term to find what you're looking for.</div></div></td></tr>}
                   {filtered.map(lead=>{
-                    const sc=STAGE_COLORS[lead.stage]||STAGE_COLORS["New"];
+                    const sc=STAGE_COLORS[lead.stage]||STAGE_COLORS["New Enquiry"];
                     const isTBC=lead.venue?.trim().toUpperCase()==="TBC";
                     const mc=lead.date?getMonthColor(monthKey(lead.date)):null;
                     const fileCount=(lead.files||[]).length;
@@ -2406,7 +2418,7 @@ function EventTracker() {
                         </td>
                         <EditCell value={lead.value}     onSave={v=>updateField(lead.id,"value",v)}   type="number" placeholder="add value" mono={true}/>
                         <td style={{padding:"8px 10px",borderLeft:"2px solid #f9fafb"}}>
-                          <select value={lead.stage} onChange={e=>{if(e.target.value==="Closed Won")fireConfetti(e.target);updateStage(lead.id,e.target.value);}}
+                          <select value={lead.stage} onChange={e=>{if(e.target.value==="Confirmed")fireConfetti(e.target);updateStage(lead.id,e.target.value);}}
                             className="stage-pill"
                             style={{background:sc.bg,color:sc.text,boxShadow:`inset 0 0 0 1.5px ${sc.dot}33`}}>
                             {STAGES.map(s=><option key={s}>{s}</option>)}
@@ -2455,7 +2467,7 @@ function EventTracker() {
           <div className="leads-cards">
             {filtered.length===0&&<div style={{padding:40,textAlign:"center",color:"#9ca3af",fontSize:14}}>No results found.</div>}
             {filtered.map(lead=>{
-              const sc=STAGE_COLORS[lead.stage]||STAGE_COLORS["New"];
+              const sc=STAGE_COLORS[lead.stage]||STAGE_COLORS["New Enquiry"];
               const mc=lead.date?getMonthColor(monthKey(lead.date)):null;
               const fileCount=(lead.files||[]).length;
               return (
@@ -2465,7 +2477,7 @@ function EventTracker() {
                       {mc&&<span style={{width:8,height:8,borderRadius:"50%",background:mc.bar,display:"inline-block",flexShrink:0}}/>}
                       <span style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.client}</span>
                     </div>
-                    <select value={lead.stage} onChange={e=>{if(e.target.value==="Closed Won")fireConfetti(e.target);updateStage(lead.id,e.target.value);}}
+                    <select value={lead.stage} onChange={e=>{if(e.target.value==="Confirmed")fireConfetti(e.target);updateStage(lead.id,e.target.value);}}
                       className="stage-pill"
                       style={{background:sc.bg,color:sc.text,boxShadow:`inset 0 0 0 1.5px ${sc.dot}33`,flexShrink:0}}>
                       {STAGES.map(s=><option key={s}>{s}</option>)}
@@ -2712,7 +2724,7 @@ function EventTracker() {
                 <label className="form-label">Deal Value (£)</label>
                 <input className="form-input" type="number" value={form.value||""} onChange={e=>setForm(f=>({...f,value:e.target.value}))} placeholder="e.g. 5000"/>
                 <div style={{fontSize:11,color:"#9ca3af",marginTop:4}}>
-                  {form.stage==="Closed Won"?"✅ Confirmed":form.stage==="Proposal"?"🔥 Warm Pipeline":form.stage==="New"?"❄️ Cold Pipeline":"ℹ️ Not tracked (use New, Proposal or Closed Won)"}
+                  {form.stage==="Confirmed"?"✅ Confirmed":form.stage==="Proposal Sent"?"🔥 Warm Pipeline":form.stage==="New Enquiry"?"❄️ Cold Pipeline":"ℹ️ Not tracked"}
                 </div>
               </div>
               <div><label className="form-label">Notes</label>
