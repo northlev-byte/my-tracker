@@ -1527,16 +1527,21 @@ function HubSpotTab({ leads, setLeads, owners }) {
       {/* ── Import CSV ── */}
       {section==="import"&&(
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          {/* Live sync banner when token is set */}
-          {tokenSaved&&!csvData&&(
-            <div style={{background:"#f0fdf4",border:"1.5px solid #86efac",borderRadius:12,padding:"16px 20px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+          {/* Live sync panel — always visible, greyed out until token is saved */}
+          {!csvData&&(
+            <div style={{background: tokenSaved?"#f0fdf4":"#f9fafb", border:`1.5px solid ${tokenSaved?"#86efac":"#e5e7eb"}`,borderRadius:12,padding:"16px 20px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:14,fontWeight:700,color:"#15803d",marginBottom:2}}>HubSpot connected</div>
-                <div style={{fontSize:12,color:"#16a34a"}}>Sync your deals live — no CSV export needed.</div>
+                <div style={{fontSize:14,fontWeight:700,color:tokenSaved?"#15803d":"#374151",marginBottom:2}}>
+                  {tokenSaved?"✓ HubSpot connected":"⚡ Sync live from HubSpot"}
+                </div>
+                <div style={{fontSize:12,color:tokenSaved?"#16a34a":"#9ca3af"}}>
+                  {tokenSaved?"Pull deals directly — no CSV export needed.":"Connect your token in the API Connection tab to enable live sync."}
+                </div>
               </div>
-              <button className="btn-primary" style={{background:"#ff7a59",border:"none",minWidth:180}} onClick={syncFromHS} disabled={syncing}>
-                {syncing?"Syncing…":"⚡ Sync from HubSpot"}
-              </button>
+              {tokenSaved
+                ? <button className="btn-primary" style={{background:"#ff7a59",border:"none",minWidth:180}} onClick={syncFromHS} disabled={syncing}>{syncing?"Syncing…":"⚡ Sync from HubSpot"}</button>
+                : <button className="btn-ghost" style={{fontSize:13}} onClick={()=>setSection("connect")}>Connect →</button>
+              }
             </div>
           )}
           {syncError&&(
