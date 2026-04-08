@@ -1392,9 +1392,8 @@ function HubSpotTab({ leads, setLeads, owners }) {
         fetch("/api/hubspot?action=owners", { headers: hdrs }),
       ]);
       const [dealsData, stagesData, ownersData] = await Promise.all([dealsRes.json(), stagesRes.json(), ownersRes.json()]);
-      if (!dealsRes.ok)  throw new Error(dealsData.error||"Failed to fetch deals");
-      if (!stagesRes.ok) throw new Error(stagesData.error||"Failed to fetch stages");
-      if (!ownersRes.ok) throw new Error(ownersData.error||"Failed to fetch owners");
+      if (!dealsRes.ok) throw new Error(dealsData.error||"Failed to fetch deals");
+      // stages/owners failures are non-fatal — we'll just use raw IDs
 
       // Build lookup maps
       const stageLabelMap = {};
