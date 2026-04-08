@@ -90,6 +90,36 @@ export default async function handler(req, res) {
       return res.status(200).json({ deals, total: deals.length });
     }
 
+    // ── Contacts ─────────────────────────────────────────────
+    if (action === "contacts") {
+      const props = [
+        "firstname", "lastname", "email", "company", "phone",
+        "createdate", "hubspot_owner_id", "hs_lead_status", "jobtitle",
+        "subject", "message", "TICKET.subject",
+      ];
+
+      let allContacts = [], after;
+      do {
+        const url = new URL(`${HS}/crm/v3/objects/contacts`);
+        url.searchParams.set("limit", "100");
+        url.searchParams.set("properties", props.join(","));
+        if (after) url.searchParams.set("after", after);
+
+        const r = await fetch(url.toString(), { headers: hdrs });
+        if (!r.ok) return res.status(r.status).json(await r.json());
+        const data = await r.json();
+        allContacts.push(...(data.results || []));
+        after = data.paging?.next?.after;
+      } while (after);
+
+      const contacts = allContacts.map(c => ({
+        id: c.id,
+        properties: c.properties,
+      }));
+
+      return res.status(200).json({ contacts, total: contacts.length });
+    }
+
     return res.status(400).json({ error: `Unknown action: ${action}` });
   } catch (err) {
     console.error("HUBSPOT_PROXY_ERROR|" + err.message);

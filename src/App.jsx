@@ -1373,6 +1373,7 @@ function HubSpotTab({ leads, setLeads, owners }) {
   const [stageFilter, setStageFilter] = useState("All");
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState(null);
+  const [syncMode, setSyncMode] = useState("contacts"); // "contacts" | "deals"
   const fileRef = useRef(null);
 
   const existingRefs = useMemo(() => new Set((leads||[]).map(l=>String(l.ref||"")).filter(Boolean)), [leads]);
@@ -1386,46 +1387,78 @@ function HubSpotTab({ leads, setLeads, owners }) {
     setSyncing(true); setSyncError(null);
     try {
       const hdrs = { Authorization: `Bearer ${token}` };
-      const [dealsRes, stagesRes, ownersRes] = await Promise.all([
-        fetch("/api/hubspot?action=deals",  { headers: hdrs }),
-        fetch("/api/hubspot?action=stages", { headers: hdrs }),
-        fetch("/api/hubspot?action=owners", { headers: hdrs }),
-      ]);
-      const [dealsData, stagesData, ownersData] = await Promise.all([dealsRes.json(), stagesRes.json(), ownersRes.json()]);
-      if (!dealsRes.ok) throw new Error(dealsData.error||"Failed to fetch deals");
-      // stages/owners failures are non-fatal — we'll just use raw IDs
 
-      // Build lookup maps
-      const stageLabelMap = {};
-      (stagesData.results||[]).forEach(pipeline =>
-        (pipeline.stages||[]).forEach(s => { stageLabelMap[s.id] = s.label; })
-      );
-      const ownerNameMap = {};
-      (ownersData.results||[]).forEach(o => {
-        ownerNameMap[String(o.id)] = [o.firstName,o.lastName].filter(Boolean).join(" ")||o.email||String(o.id);
-      });
+      if (syncMode === "contacts") {
+        // ── Sync form contacts ─────────────────────────────
+        const [contactsRes, ownersRes] = await Promise.all([
+          fetch("/api/hubspot?action=contacts", { headers: hdrs }),
+          fetch("/api/hubspot?action=owners",   { headers: hdrs }),
+        ]);
+        const [contactsData, ownersData] = await Promise.all([contactsRes.json(), ownersRes.json()]);
+        if (!contactsRes.ok) throw new Error(contactsData.error||"Failed to fetch contacts");
 
-      // Convert to row format matching the existing import pipeline
-      const headers = ["Deal Name","Amount","Close Date","Stage","Owner","Company","HubSpot ID"];
-      const rows = (dealsData.deals||[]).map(d => ({
-        "Deal Name":  d.properties?.dealname||"",
-        "Amount":     d.properties?.amount||"",
-        "Close Date": d.properties?.closedate ? d.properties.closedate.split("T")[0] : "",
-        "Stage":      stageLabelMap[d.properties?.dealstage]||d.properties?.dealstage||"",
-        "Owner":      ownerNameMap[String(d.properties?.hubspot_owner_id||"")]||d.properties?.hubspot_owner_id||"",
-        "Company":    d.company||"",
-        "HubSpot ID": d.id||"",
-      }));
+        const ownerNameMap = {};
+        (ownersData.results||[]).forEach(o => {
+          ownerNameMap[String(o.id)] = [o.firstName,o.lastName].filter(Boolean).join(" ")||o.email||String(o.id);
+        });
 
-      if (rows.length === 0) {
-        throw new Error(`HubSpot returned 0 deals. Check that your account has deals in CRM → Deals, and that the token has 'crm.objects.deals.read' scope.`);
+        const headers = ["Name","Email","Company","Phone","Owner","Created Date","HubSpot ID"];
+        const rows = (contactsData.contacts||[]).map(c => ({
+          "Name":         [c.properties?.firstname,c.properties?.lastname].filter(Boolean).join(" ")||"",
+          "Email":        c.properties?.email||"",
+          "Company":      c.properties?.company||"",
+          "Phone":        c.properties?.phone||"",
+          "Owner":        ownerNameMap[String(c.properties?.hubspot_owner_id||"")]||c.properties?.hubspot_owner_id||"",
+          "Created Date": c.properties?.createdate ? c.properties.createdate.split("T")[0] : "",
+          "HubSpot ID":   c.id||"",
+        }));
+
+        if (rows.length === 0) throw new Error("No contacts found. Make sure your token has 'crm.objects.contacts.read' scope.");
+
+        setCsvHeaders(headers);
+        setCsvData(rows);
+        setFieldMap({ client:"Company", event:"Name", value:"", date:"Created Date", stage:"", assignee:"Owner", ref:"HubSpot ID", notes:"Email" });
+        setPreview(null); setImportResult(null);
+        setSection("import");
+
+      } else {
+        // ── Sync deals ─────────────────────────────────────
+        const [dealsRes, stagesRes, ownersRes] = await Promise.all([
+          fetch("/api/hubspot?action=deals",  { headers: hdrs }),
+          fetch("/api/hubspot?action=stages", { headers: hdrs }),
+          fetch("/api/hubspot?action=owners", { headers: hdrs }),
+        ]);
+        const [dealsData, stagesData, ownersData] = await Promise.all([dealsRes.json(), stagesRes.json(), ownersRes.json()]);
+        if (!dealsRes.ok) throw new Error(dealsData.error||"Failed to fetch deals");
+
+        const stageLabelMap = {};
+        (stagesData.results||[]).forEach(pipeline =>
+          (pipeline.stages||[]).forEach(s => { stageLabelMap[s.id] = s.label; })
+        );
+        const ownerNameMap = {};
+        (ownersData.results||[]).forEach(o => {
+          ownerNameMap[String(o.id)] = [o.firstName,o.lastName].filter(Boolean).join(" ")||o.email||String(o.id);
+        });
+
+        const headers = ["Deal Name","Amount","Close Date","Stage","Owner","Company","HubSpot ID"];
+        const rows = (dealsData.deals||[]).map(d => ({
+          "Deal Name":  d.properties?.dealname||"",
+          "Amount":     d.properties?.amount||"",
+          "Close Date": d.properties?.closedate ? d.properties.closedate.split("T")[0] : "",
+          "Stage":      stageLabelMap[d.properties?.dealstage]||d.properties?.dealstage||"",
+          "Owner":      ownerNameMap[String(d.properties?.hubspot_owner_id||"")]||d.properties?.hubspot_owner_id||"",
+          "Company":    d.company||"",
+          "HubSpot ID": d.id||"",
+        }));
+
+        if (rows.length === 0) throw new Error("No deals found in HubSpot CRM → Deals.");
+
+        setCsvHeaders(headers);
+        setCsvData(rows);
+        setFieldMap({ client:"Company", event:"Deal Name", value:"Amount", date:"Close Date", stage:"Stage", assignee:"Owner", ref:"HubSpot ID", notes:"" });
+        setPreview(null); setImportResult(null);
+        setSection("import");
       }
-
-      setCsvHeaders(headers);
-      setCsvData(rows);
-      setFieldMap({ client:"Company", event:"Deal Name", value:"Amount", date:"Close Date", stage:"Stage", assignee:"Owner", ref:"HubSpot ID", notes:"" });
-      setPreview(null); setImportResult(null);
-      setSection("import");
     } catch(err) {
       setSyncError(err.message);
     } finally {
@@ -1532,17 +1565,24 @@ function HubSpotTab({ leads, setLeads, owners }) {
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
           {/* Live sync panel — always visible, greyed out until token is saved */}
           {!csvData&&(
-            <div style={{background: tokenSaved?"#f0fdf4":"#f9fafb", border:`1.5px solid ${tokenSaved?"#86efac":"#e5e7eb"}`,borderRadius:12,padding:"16px 20px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+            <div style={{background:tokenSaved?"#f0fdf4":"#f9fafb",border:`1.5px solid ${tokenSaved?"#86efac":"#e5e7eb"}`,borderRadius:12,padding:"16px 20px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:14,fontWeight:700,color:tokenSaved?"#15803d":"#374151",marginBottom:2}}>
+                <div style={{fontSize:14,fontWeight:700,color:tokenSaved?"#15803d":"#374151",marginBottom:6}}>
                   {tokenSaved?"✓ HubSpot connected":"⚡ Sync live from HubSpot"}
                 </div>
-                <div style={{fontSize:12,color:tokenSaved?"#16a34a":"#9ca3af"}}>
-                  {tokenSaved?"Pull deals directly — no CSV export needed.":"Connect your token in the API Connection tab to enable live sync."}
-                </div>
+                {tokenSaved&&(
+                  <div style={{display:"flex",gap:6,marginBottom:2}}>
+                    {[{id:"contacts",label:"Form contacts"},{ id:"deals",label:"Deals"}].map(m=>(
+                      <button key={m.id} onClick={()=>setSyncMode(m.id)} style={{fontSize:12,padding:"4px 12px",borderRadius:999,border:`1.5px solid ${syncMode===m.id?"#16a34a":"#d1fae5"}`,background:syncMode===m.id?"#16a34a":"#fff",color:syncMode===m.id?"#fff":"#16a34a",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {!tokenSaved&&<div style={{fontSize:12,color:"#9ca3af"}}>Connect your token in the API Connection tab to enable live sync.</div>}
               </div>
               {tokenSaved
-                ? <button className="btn-primary" style={{background:"#ff7a59",border:"none",minWidth:180}} onClick={syncFromHS} disabled={syncing}>{syncing?"Syncing…":"⚡ Sync from HubSpot"}</button>
+                ? <button className="btn-primary" style={{background:"#ff7a59",border:"none",minWidth:180}} onClick={syncFromHS} disabled={syncing}>{syncing?"Syncing…":`⚡ Sync ${syncMode==="contacts"?"contacts":"deals"}`}</button>
                 : <button className="btn-ghost" style={{fontSize:13}} onClick={()=>setSection("connect")}>Connect →</button>
               }
             </div>
