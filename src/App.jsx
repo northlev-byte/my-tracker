@@ -1187,12 +1187,13 @@ function ProspectsTab({ prospects, setProspects, owners, leads, setLeads, setAct
                 )}
                 {!editing && (
                   <button onClick={() => {
-                    const subject = encodeURIComponent(`Follow up: ${p.name}`);
-                    const body = encodeURIComponent([p.notes, p.phone ? `Phone: ${p.phone}` : ""].filter(Boolean).join("\n"));
                     const now = new Date(); now.setHours(now.getHours()+1,0,0,0);
                     const end = new Date(now); end.setHours(end.getHours()+1);
-                    const fmt = d => d.toISOString().slice(0,16);
-                    window.open(`https://outlook.office.com/calendar/action/compose?subject=${subject}&startdt=${fmt(now)}&enddt=${fmt(end)}&body=${body}`, "_blank");
+                    const fmt = d => d.toISOString().replace(/[-:]/g,"").split(".")[0]+"Z";
+                    const notes = [p.notes, p.phone ? `Phone: ${p.phone}` : ""].filter(Boolean).join("\\n");
+                    const ics = [`BEGIN:VCALENDAR`,`VERSION:2.0`,`BEGIN:VEVENT`,`DTSTART:${fmt(now)}`,`DTEND:${fmt(end)}`,`SUMMARY:Follow up: ${p.name}`,`DESCRIPTION:${notes}`,`END:VEVENT`,`END:VCALENDAR`].join("\r\n");
+                    const blob = new Blob([ics], {type:"text/calendar"});
+                    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `followup-${p.name.replace(/\s+/g,"-")}.ics`; a.click();
                   }}
                     style={{ background: "#fff", color: "#0078d4", border: "1.5px solid #0078d4", borderRadius: 7, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0078d4" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
