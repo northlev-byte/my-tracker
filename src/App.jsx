@@ -1417,6 +1417,10 @@ function HubSpotTab({ leads, setLeads, owners }) {
         "HubSpot ID": d.id||"",
       }));
 
+      if (rows.length === 0) {
+        throw new Error(`HubSpot returned 0 deals. Check that your account has deals in CRM → Deals, and that the token has 'crm.objects.deals.read' scope.`);
+      }
+
       setCsvHeaders(headers);
       setCsvData(rows);
       setFieldMap({ client:"Company", event:"Deal Name", value:"Amount", date:"Close Date", stage:"Stage", assignee:"Owner", ref:"HubSpot ID", notes:"" });
