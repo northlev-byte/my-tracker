@@ -1371,6 +1371,8 @@ function HubSpotTab({ leads, setLeads, owners }) {
   const [preview, setPreview] = useState(null);
   const [importResult, setImportResult] = useState(null);
   const [stageFilter, setStageFilter] = useState("All");
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(null);
   const fileRef = useRef(null);
 
   const existingRefs = useMemo(() => new Set((leads||[]).map(l=>String(l.ref||"")).filter(Boolean)), [leads]);
@@ -1378,6 +1380,55 @@ function HubSpotTab({ leads, setLeads, owners }) {
   function saveToken() { localStorage.setItem("hs_token", token); setTokenSaved(true); }
   function saveOwnerMap() { localStorage.setItem("hs_ownermap", JSON.stringify(ownerMap)); }
   function saveStageMap() { localStorage.setItem("hs_stagemap", JSON.stringify(customStageMap)); }
+
+  async function syncFromHS() {
+    if (!token) return;
+    setSyncing(true); setSyncError(null);
+    try {
+      const hdrs = { Authorization: `Bearer ${token}` };
+      const [dealsRes, stagesRes, ownersRes] = await Promise.all([
+        fetch("/api/hubspot?action=deals",  { headers: hdrs }),
+        fetch("/api/hubspot?action=stages", { headers: hdrs }),
+        fetch("/api/hubspot?action=owners", { headers: hdrs }),
+      ]);
+      const [dealsData, stagesData, ownersData] = await Promise.all([dealsRes.json(), stagesRes.json(), ownersRes.json()]);
+      if (!dealsRes.ok)  throw new Error(dealsData.error||"Failed to fetch deals");
+      if (!stagesRes.ok) throw new Error(stagesData.error||"Failed to fetch stages");
+      if (!ownersRes.ok) throw new Error(ownersData.error||"Failed to fetch owners");
+
+      // Build lookup maps
+      const stageLabelMap = {};
+      (stagesData.results||[]).forEach(pipeline =>
+        (pipeline.stages||[]).forEach(s => { stageLabelMap[s.id] = s.label; })
+      );
+      const ownerNameMap = {};
+      (ownersData.results||[]).forEach(o => {
+        ownerNameMap[String(o.id)] = [o.firstName,o.lastName].filter(Boolean).join(" ")||o.email||String(o.id);
+      });
+
+      // Convert to row format matching the existing import pipeline
+      const headers = ["Deal Name","Amount","Close Date","Stage","Owner","Company","HubSpot ID"];
+      const rows = (dealsData.deals||[]).map(d => ({
+        "Deal Name":  d.properties?.dealname||"",
+        "Amount":     d.properties?.amount||"",
+        "Close Date": d.properties?.closedate ? d.properties.closedate.split("T")[0] : "",
+        "Stage":      stageLabelMap[d.properties?.dealstage]||d.properties?.dealstage||"",
+        "Owner":      ownerNameMap[String(d.properties?.hubspot_owner_id||"")]||d.properties?.hubspot_owner_id||"",
+        "Company":    d.company||"",
+        "HubSpot ID": d.id||"",
+      }));
+
+      setCsvHeaders(headers);
+      setCsvData(rows);
+      setFieldMap({ client:"Company", event:"Deal Name", value:"Amount", date:"Close Date", stage:"Stage", assignee:"Owner", ref:"HubSpot ID", notes:"" });
+      setPreview(null); setImportResult(null);
+      setSection("import");
+    } catch(err) {
+      setSyncError(err.message);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   function handleCSVFile(e) {
     const file = e.target.files[0]; if (!file) return;
@@ -1476,6 +1527,25 @@ function HubSpotTab({ leads, setLeads, owners }) {
       {/* ── Import CSV ── */}
       {section==="import"&&(
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          {/* Live sync banner when token is set */}
+          {tokenSaved&&!csvData&&(
+            <div style={{background:"#f0fdf4",border:"1.5px solid #86efac",borderRadius:12,padding:"16px 20px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:700,color:"#15803d",marginBottom:2}}>HubSpot connected</div>
+                <div style={{fontSize:12,color:"#16a34a"}}>Sync your deals live — no CSV export needed.</div>
+              </div>
+              <button className="btn-primary" style={{background:"#ff7a59",border:"none",minWidth:180}} onClick={syncFromHS} disabled={syncing}>
+                {syncing?"Syncing…":"⚡ Sync from HubSpot"}
+              </button>
+            </div>
+          )}
+          {syncError&&(
+            <div style={{background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:12,padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}>
+              <span style={{fontSize:13,color:"#dc2626",flex:1}}>Sync failed: {syncError}</span>
+              <button onClick={()=>setSyncError(null)} style={{background:"none",border:"none",color:"#9ca3af",cursor:"pointer",fontSize:18,lineHeight:1}}>×</button>
+            </div>
+          )}
+
           {importResult&&(
             <div style={{background:"#f0fdf4",border:"1.5px solid #86efac",borderRadius:12,padding:"16px 20px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
               <span style={{fontSize:15,fontWeight:700,color:"#15803d"}}>✓ {importResult.count} deal{importResult.count!==1?"s":""} imported</span>
@@ -1659,12 +1729,16 @@ function HubSpotTab({ leads, setLeads, owners }) {
             {tokenSaved&&<div style={{fontSize:12,color:"#16a34a",marginTop:8,fontWeight:600}}>✓ Token saved</div>}
           </div>
 
-          <div style={{background:"#fffbeb",border:"1.5px solid #fde68a",borderRadius:12,padding:"14px 18px"}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#92400e",marginBottom:8}}>⚠ Direct API calls from browser</div>
-            <div style={{fontSize:12,color:"#78350f",lineHeight:1.7}}>
-              HubSpot's API does not support direct browser requests (CORS restriction). To enable live API sync, a small server-side proxy is needed — for example a Vercel API route or Google Apps Script endpoint. For now, use the <strong>CSV export/import</strong> above which works without any setup.
+          {tokenSaved&&(
+            <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:20}}>
+              <div style={{fontWeight:700,fontSize:14,color:"#111827",marginBottom:6}}>Sync deals from HubSpot</div>
+              <div style={{fontSize:12,color:"#6b7280",marginBottom:14}}>Pulls all deals from your HubSpot pipeline — no CSV export needed. Stages and owners are resolved automatically.</div>
+              <button className="btn-primary" style={{background:"#ff7a59",border:"none",minWidth:200}} onClick={syncFromHS} disabled={syncing}>
+                {syncing?"Syncing deals…":"⚡ Sync now"}
+              </button>
+              {syncError&&<div style={{fontSize:12,color:"#dc2626",marginTop:8,fontWeight:600}}>✗ {syncError}</div>}
             </div>
-          </div>
+          )}
 
           <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:20}}>
             <div style={{fontWeight:700,fontSize:14,color:"#111827",marginBottom:10}}>How to create a Private App token</div>
