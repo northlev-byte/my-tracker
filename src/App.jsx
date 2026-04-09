@@ -781,6 +781,7 @@ function ProspectsTab({ prospects, setProspects, owners, leads, setLeads, setAct
   const [addingLog, setAddingLog] = useState(false);
   const [logForm, setLogForm] = useState({ date: "", note: "" });
 
+  const [activeOwner, setActiveOwner] = useState("All");
   const individualOwners = (owners || DEFAULT_OWNERS).filter(o => !/[/&]/.test(o));
 
   function startAdd(owner) {
@@ -891,20 +892,46 @@ function ProspectsTab({ prospects, setProspects, owners, leads, setLeads, setAct
   // Keep selectedProspect in sync if prospects array changes
   const liveSelected = selectedProspect ? (prospects || []).find(p => p.id === selectedProspect.id) || null : null;
 
+  const visibleOwners = activeOwner === "All" ? individualOwners : individualOwners.filter(o => o === activeOwner);
+
   return (
     <div>
-      <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 18 }}>
-        Track potential clients and venues each team member is in conversation with. Click any entry to view details.
+      {/* Owner tab bar */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
+        {["All", ...individualOwners].map(owner => {
+          const pc = owner === "All" ? null : (PERSON_COLORS[owner] || { dot: "#6b7280", text: "#374151" });
+          const count = owner === "All"
+            ? (prospects || []).length
+            : (prospects || []).filter(p => p.assignee === owner).length;
+          const isActive = activeOwner === owner;
+          return (
+            <button key={owner} onClick={() => setActiveOwner(owner)} style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "7px 14px", borderRadius: 999,
+              border: `1.5px solid ${isActive ? (pc?.dot || "#111827") : "#e5e7eb"}`,
+              background: isActive ? (pc?.dot || "#111827") : "#fff",
+              color: isActive ? "#fff" : "#6b7280",
+              fontWeight: isActive ? 700 : 500, fontSize: 13,
+              cursor: "pointer", fontFamily: "inherit", transition: "all .15s",
+            }}>
+              {pc && <span style={{ width: 7, height: 7, borderRadius: "50%", background: isActive ? "#fff" : pc.dot, display: "inline-block", flexShrink: 0 }} />}
+              {owner}
+              <span style={{ fontSize: 11, opacity: .7, fontWeight: 700 }}>{count}</span>
+            </button>
+          );
+        })}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 16 }}>
-        {individualOwners.map(owner => {
+
+      <div style={{ display: "grid", gridTemplateColumns: activeOwner === "All" ? "repeat(auto-fill,minmax(320px,1fr))" : "1fr", gap: 16 }}>
+        {visibleOwners.map(owner => {
           const pc = PERSON_COLORS[owner] || { bg: "#f9fafb", border: "#e5e7eb", text: "#374151", dot: "#6b7280" };
           const ownerProspects = (prospects || []).filter(p => p.assignee === owner);
           const clientCount = ownerProspects.filter(p => p.type === "Client").length;
           const venueCount = ownerProspects.filter(p => p.type === "Venue").length;
 
+          const isSolo = activeOwner !== "All";
           return (
-            <div key={owner} style={{ background: pc.bg, border: `1.5px solid ${pc.border}`, borderRadius: 12, padding: "16px 18px" }}>
+            <div key={owner} style={{ background: pc.bg, border: `1.5px solid ${pc.border}`, borderRadius: 12, padding: isSolo ? "20px 24px" : "16px 18px" }}>
               {/* Header */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                 <div style={{ width: 10, height: 10, borderRadius: "50%", background: pc.dot, flexShrink: 0 }} />
