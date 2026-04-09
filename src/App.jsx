@@ -327,9 +327,11 @@ function DateRangeCell({ startDate, endDate, onSaveStart, onSaveEnd }) {
     <td style={{padding:"6px 8px",verticalAlign:"middle"}}>
       <div style={{display:"flex",flexDirection:"column",gap:3}}>
         <input ref={startRef} type="date" value={draftStart} onChange={e=>setDraftStart(e.target.value)}
+          onBlur={commit}
           onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape"){setDraftStart(startDate||"");setDraftEnd(endDate||"");setEditing(false);}}}
           style={inputStyle}/>
         <input type="date" value={draftEnd} onChange={e=>setDraftEnd(e.target.value)}
+          onBlur={commit}
           onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape"){setDraftStart(startDate||"");setDraftEnd(endDate||"");setEditing(false);}}}
           style={{...inputStyle,borderColor:"#a5b4fc"}}/>
         <div style={{display:"flex",gap:4}}>

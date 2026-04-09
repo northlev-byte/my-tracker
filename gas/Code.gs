@@ -95,7 +95,7 @@ function doPost(e) {
 
   const leadsSheet = ss.getSheetByName("Events") || ss.insertSheet("Events");
   leadsSheet.clearContents();
-  const headers = ["id","client","event","ref","date","endDate","venue","assignee","stage","name","company","email","value","notes","classCode","files"];
+  const headers = ["id","client","event","ref","date","endDate","venue","assignee","stage","name","company","email","value","notes","classCode","files","recontactDate"];
   const rows = [headers];
   (payload.leads || []).forEach(lead => rows.push(headers.map(h => {
     if (h === "files") return JSON.stringify(lead[h] || []);
