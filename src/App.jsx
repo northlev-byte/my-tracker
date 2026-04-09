@@ -325,13 +325,12 @@ function DateRangeCell({ startDate, endDate, onSaveStart, onSaveEnd }) {
   const inputStyle = {width:"100%",padding:"4px 7px",border:"1.5px solid #6366f1",borderRadius:5,fontSize:12,fontFamily:"inherit",outline:"none",background:"#fafafe"};
   if (editing) return (
     <td style={{padding:"6px 8px",verticalAlign:"middle"}}>
-      <div style={{display:"flex",flexDirection:"column",gap:3}}>
+      <div style={{display:"flex",flexDirection:"column",gap:3}}
+        onBlur={e=>{ if(!e.currentTarget.contains(e.relatedTarget)) commit(); }}>
         <input ref={startRef} type="date" value={draftStart} onChange={e=>setDraftStart(e.target.value)}
-          onBlur={commit}
           onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape"){setDraftStart(startDate||"");setDraftEnd(endDate||"");setEditing(false);}}}
           style={inputStyle}/>
         <input type="date" value={draftEnd} onChange={e=>setDraftEnd(e.target.value)}
-          onBlur={commit}
           onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape"){setDraftStart(startDate||"");setDraftEnd(endDate||"");setEditing(false);}}}
           style={{...inputStyle,borderColor:"#a5b4fc"}}/>
         <div style={{display:"flex",gap:4}}>
