@@ -315,31 +315,39 @@ function DateRangeCell({ startDate, endDate, onSaveStart, onSaveEnd }) {
   const [editing, setEditing] = useState(false);
   const [draftStart, setDraftStart] = useState(startDate||"");
   const [draftEnd, setDraftEnd]     = useState(endDate||"");
+  // Refs hold the latest values so commit() never reads a stale closure
+  const dsRef = useRef(startDate||"");
+  const deRef = useRef(endDate||"");
   const startRef = useRef();
   const blurTimer = useRef(null);
   useEffect(()=>{ if(editing) startRef.current?.focus(); },[editing]);
+
+  function updStart(v) { dsRef.current = v; setDraftStart(v); }
+  function updEnd(v)   { deRef.current = v; setDraftEnd(v); }
+
   function commit() {
     setEditing(false);
-    if (draftStart!==(startDate||"")) onSaveStart(draftStart);
-    if (draftEnd  !==(endDate||""))   onSaveEnd(draftEnd);
+    if (dsRef.current !== (startDate||"")) onSaveStart(dsRef.current);
+    if (deRef.current !== (endDate||""))   onSaveEnd(deRef.current);
   }
   function handleBlur()  { blurTimer.current = setTimeout(commit, 200); }
-  function handleFocus() { if(blurTimer.current){ clearTimeout(blurTimer.current); blurTimer.current=null; } }
+  function handleFocus() { clearTimeout(blurTimer.current); blurTimer.current = null; }
+
   const inputStyle = {width:"100%",padding:"4px 7px",border:"1.5px solid #6366f1",borderRadius:5,fontSize:12,fontFamily:"inherit",outline:"none",background:"#fafafe"};
   if (editing) return (
     <td style={{padding:"6px 8px",verticalAlign:"middle"}}>
       <div style={{display:"flex",flexDirection:"column",gap:3}}>
-        <input ref={startRef} type="date" value={draftStart} onChange={e=>setDraftStart(e.target.value)}
+        <input ref={startRef} type="date" value={draftStart} onChange={e=>updStart(e.target.value)}
           onBlur={handleBlur} onFocus={handleFocus}
-          onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape"){setDraftStart(startDate||"");setDraftEnd(endDate||"");setEditing(false);}}}
+          onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape"){updStart(startDate||"");updEnd(endDate||"");setEditing(false);}}}
           style={inputStyle}/>
-        <input type="date" value={draftEnd} onChange={e=>setDraftEnd(e.target.value)}
+        <input type="date" value={draftEnd} onChange={e=>updEnd(e.target.value)}
           onBlur={handleBlur} onFocus={handleFocus}
-          onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape"){setDraftStart(startDate||"");setDraftEnd(endDate||"");setEditing(false);}}}
+          onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape"){updStart(startDate||"");updEnd(endDate||"");setEditing(false);}}}
           style={{...inputStyle,borderColor:"#a5b4fc"}}/>
         <div style={{display:"flex",gap:4}}>
           <button onMouseDown={e=>{e.preventDefault();clearTimeout(blurTimer.current);commit();}} style={{flex:1,fontSize:10,padding:"2px 0",border:"none",background:"#6366f1",color:"#fff",borderRadius:4,cursor:"pointer"}}>Save</button>
-          {draftEnd&&<button onMouseDown={e=>{e.preventDefault();clearTimeout(blurTimer.current);setDraftEnd("");}} style={{fontSize:10,padding:"2px 5px",border:"1px solid #e5e7eb",background:"#fff",color:"#9ca3af",borderRadius:4,cursor:"pointer"}}>✕ end</button>}
+          {draftEnd&&<button onMouseDown={e=>{e.preventDefault();clearTimeout(blurTimer.current);updEnd("");}} style={{fontSize:10,padding:"2px 5px",border:"1px solid #e5e7eb",background:"#fff",color:"#9ca3af",borderRadius:4,cursor:"pointer"}}>✕ end</button>}
         </div>
       </div>
     </td>
