@@ -40,8 +40,15 @@ function doGet(e) {
     try { prospects = JSON.parse(pCell); } catch(_) { prospects = []; }
   }
 
+  const holidaysSheet = ss.getSheetByName("Holidays") || ss.insertSheet("Holidays");
+  let holidays = [];
+  const hCell = holidaysSheet.getRange("A1").getValue();
+  if (hCell && typeof hCell === 'string' && hCell !== '') {
+    try { holidays = JSON.parse(hCell); } catch(_) { holidays = []; }
+  }
+
   const callback = e.parameter.callback;
-  const output = JSON.stringify({ leads, owners, prospects });
+  const output = JSON.stringify({ leads, owners, prospects, holidays });
   return ContentService
     .createTextOutput(callback ? callback + '(' + output + ')' : output)
     .setMimeType(ContentService.MimeType.JAVASCRIPT);
@@ -111,6 +118,9 @@ function doPost(e) {
 
   const prospectsSheet = ss.getSheetByName("Prospects") || ss.insertSheet("Prospects");
   prospectsSheet.getRange("A1").setValue(JSON.stringify(payload.prospects || []));
+
+  const holidaysSheet = ss.getSheetByName("Holidays") || ss.insertSheet("Holidays");
+  holidaysSheet.getRange("A1").setValue(JSON.stringify(payload.holidays || []));
 
   return ContentService
     .createTextOutput(JSON.stringify({ success: true }))

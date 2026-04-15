@@ -679,23 +679,23 @@ function CalendarView({ leads, onEventClick, holidays=[], recontacts=[] }) {
 }
 
 // ── Holidays Tab ───────────────────────────────────────────
-function HolidaysTab({ fy }) {
-  const baseHols = (fy==="fy2627" ? HOLIDAYS_2627 : HOLIDAYS_2728).map((h,i)=>({...h,id:`base-${i}`}));
-  const [allHols, setAllHols] = useState(baseHols);
+function HolidaysTab({ holidays, setHolidays, owners }) {
   const [newEntry, setNewEntry] = useState({ person:"", dates:"", note:"" });
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState({});
-  const people = [...new Set(allHols.map(h=>h.person))].filter(Boolean).sort();
+
+  const individualOwners = (owners || DEFAULT_OWNERS).filter(o => !/[/&]/.test(o));
+  const people = [...new Set([...individualOwners, ...(holidays||[]).map(h=>h.person)])].filter(Boolean);
 
   function addEntry() {
     if (!newEntry.person || !newEntry.dates) return;
-    setAllHols(h=>[...h, {...newEntry, id:`custom-${Date.now()}`}]);
+    setHolidays(h=>[...(h||[]), {...newEntry, id:`custom-${Date.now()}`}]);
     setNewEntry({ person:"", dates:"", note:"" });
   }
-  function deleteEntry(id) { setAllHols(h=>h.filter(x=>x.id!==id)); }
+  function deleteEntry(id) { setHolidays(h=>(h||[]).filter(x=>x.id!==id)); }
   function startEdit(h) { setEditingId(h.id); setEditDraft({dates:h.dates,note:h.note||""}); }
   function saveEdit(id) {
-    setAllHols(h=>h.map(x=>x.id===id?{...x,...editDraft}:x));
+    setHolidays(h=>(h||[]).map(x=>x.id===id?{...x,...editDraft}:x));
     setEditingId(null);
   }
 
@@ -707,8 +707,11 @@ function HolidaysTab({ fy }) {
         <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end"}}>
           <div>
             <div style={{fontSize:11,fontWeight:700,color:"#6b7280",textTransform:"uppercase",letterSpacing:".07em",marginBottom:4}}>Person</div>
-            <input value={newEntry.person} onChange={e=>setNewEntry(n=>({...n,person:e.target.value}))}
-              placeholder="e.g. Jordan" className="form-input" style={{width:120}}/>
+            <select value={newEntry.person} onChange={e=>setNewEntry(n=>({...n,person:e.target.value}))}
+              className="form-input" style={{width:130}}>
+              <option value="">— select —</option>
+              {individualOwners.map(o=><option key={o} value={o}>{o}</option>)}
+            </select>
           </div>
           <div>
             <div style={{fontSize:11,fontWeight:700,color:"#6b7280",textTransform:"uppercase",letterSpacing:".07em",marginBottom:4}}>Dates</div>
@@ -728,7 +731,7 @@ function HolidaysTab({ fy }) {
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:16}}>
         {people.map(person=>{
           const pc = PERSON_COLORS[person] || { bg:"#f9fafb",border:"#e5e7eb",text:"#374151",dot:"#6b7280" };
-          const personHols = allHols.filter(h=>h.person===person);
+          const personHols = (holidays||[]).filter(h=>h.person===person);
           return (
             <div key={person} style={{background:pc.bg,border:`1.5px solid ${pc.border}`,borderRadius:12,padding:"16px 18px"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
@@ -1870,6 +1873,7 @@ function EventTracker() {
   const [view, setView]                     = useState("table");
   const [activeTab, setActiveTab]           = useState("events"); // events | lost | holidays
   const [prospects, setProspects]           = useState(null);
+  const [holidays,  setHolidays]            = useState(null);
   const [saving, setSaving]                 = useState(false);
   const [lastSaved, setLastSaved]           = useState(null);
   const [saveError, setSaveError]           = useState(false);
@@ -1879,7 +1883,7 @@ function EventTracker() {
   const fileInputRef = useRef(null);
 
   const currentFY = FINANCIAL_YEARS.find(f=>f.id===activeFY) || FINANCIAL_YEARS[0];
-  const holidaysList = useMemo(()=>(activeFY==="fy2728"?HOLIDAYS_2728:HOLIDAYS_2627).filter(h=>h.dates),[activeFY]);
+  const holidaysList = useMemo(()=>(holidays||[]).filter(h=>h.dates),[holidays]);
 
   // Track whether initial load is complete — prevents save firing before load finishes
   const loadedRef = useRef(false);
@@ -1933,12 +1937,23 @@ function EventTracker() {
         } else {
           setProspects(JSON.parse(localStorage.getItem("connectin_prospects") || "[]"));
         }
+        // Holidays — seed from hardcoded if none saved yet
+        const seedHols = HOLIDAYS_2627.map((h,i)=>({...h,id:`base-${i}`}));
+        if (Array.isArray(data.holidays) && data.holidays.length > 0) {
+          setHolidays(data.holidays);
+          localStorage.setItem("connectin_holidays", JSON.stringify(data.holidays));
+        } else {
+          const cached = localStorage.getItem("connectin_holidays");
+          setHolidays(cached ? JSON.parse(cached) : seedHols);
+        }
       } catch {
         // Sheet unreachable — restore from localStorage so user data isn't lost
         const cachedLeads = localStorage.getItem("connectin_leads");
         setLeads(cachedLeads ? JSON.parse(cachedLeads) : REAL_DATA);
         setOwners(JSON.parse(localStorage.getItem("connectin_owners") || "null") || DEFAULT_OWNERS);
         setProspects(JSON.parse(localStorage.getItem("connectin_prospects") || "[]"));
+        const seedHols = HOLIDAYS_2627.map((h,i)=>({...h,id:`base-${i}`}));
+        setHolidays(JSON.parse(localStorage.getItem("connectin_holidays") || JSON.stringify(seedHols)));
       } finally {
         // Mark load as complete — now saves are allowed
         loadedRef.current = true;
@@ -1957,10 +1972,13 @@ function EventTracker() {
   useEffect(()=>{
     if(prospects!==null) localStorage.setItem("connectin_prospects", JSON.stringify(prospects));
   },[prospects]);
+  useEffect(()=>{
+    if(holidays!==null) localStorage.setItem("connectin_holidays", JSON.stringify(holidays));
+  },[holidays]);
 
   // Save to Google Sheets (debounced) — only fires AFTER initial load is done
   useEffect(()=>{
-    if(leads===null||owners===null||prospects===null) return;
+    if(leads===null||owners===null||prospects===null||holidays===null) return;
     if(!loadedRef.current) return; // Don't save during initial load
     if(saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current=setTimeout(async()=>{
@@ -1983,7 +2001,7 @@ function EventTracker() {
         }
 
         console.log("[SAVE] sending", leadsToSave.length, "leads to Sheets");
-        const saveRes = await fetch(SHEET_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads:leadsToSave,owners,prospects})});
+        const saveRes = await fetch(SHEET_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads:leadsToSave,owners,prospects,holidays})});
         const saveText = await saveRes.text();
         console.log("[SAVE] response:", saveRes.status, saveText.substring(0, 200));
 
@@ -2013,7 +2031,7 @@ function EventTracker() {
       } catch(err) { console.error("[SAVE] exception:", err); setSaveError(true); }
       finally { setSaving(false); }
     },1500);
-  },[leads,owners,prospects]);
+  },[leads,owners,prospects,holidays]);
 
   // Filter leads to current FY (or all leads if "all" selected)
   const fyLeads = useMemo(()=>{
@@ -2383,7 +2401,7 @@ function EventTracker() {
           ))}
         </div>
 
-        {activeTab==="holidays"&&<HolidaysTab fy={activeFY}/>}
+        {activeTab==="holidays"&&<HolidaysTab holidays={holidays||[]} setHolidays={setHolidays} owners={owners}/>}
         {activeTab==="prospects"&&<ProspectsTab prospects={prospects} setProspects={setProspects} owners={owners} leads={leads} setLeads={setLeads} setActiveTab={setActiveTab}/>}
         {activeTab==="hubspot"&&<HubSpotTab leads={leads} setLeads={setLeads} owners={owners}/>}
 
