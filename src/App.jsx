@@ -2086,6 +2086,52 @@ function EventTracker() {
     return l;
   },[fyLeads,search,filterStage,filterAssignee,sortBy]);
 
+  // Month collapsing — past months auto-collapse, user can override
+  const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
+  const [collapsedMonths, setCollapsedMonths] = useState(()=>{
+    try { return new Set(JSON.parse(localStorage.getItem("connectin_collapsed_months")||"[]")); }
+    catch { return new Set(); }
+  });
+  function toggleMonth(key) {
+    setCollapsedMonths(prev=>{
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      localStorage.setItem("connectin_collapsed_months", JSON.stringify([...next]));
+      return next;
+    });
+  }
+  function isMonthPast(key) { return key < currentMonthKey; }
+  function isCollapsed(key) {
+    // Past months: collapsed unless user explicitly expanded; future: expanded unless user collapsed
+    if(isMonthPast(key)) return !collapsedMonths.has(`open:${key}`);
+    return collapsedMonths.has(key);
+  }
+  function handleMonthToggle(key) {
+    if(isMonthPast(key)) {
+      // Toggle "open:" override for past months
+      setCollapsedMonths(prev=>{
+        const next = new Set(prev);
+        next.has(`open:${key}`) ? next.delete(`open:${key}`) : next.add(`open:${key}`);
+        localStorage.setItem("connectin_collapsed_months", JSON.stringify([...next]));
+        return next;
+      });
+    } else {
+      toggleMonth(key);
+    }
+  }
+
+  // Group filtered leads by month for the table view
+  const groupedByMonth = useMemo(()=>{
+    const groups = [];
+    const seen = {};
+    filtered.forEach(lead=>{
+      const key = monthKey(lead.date)||"no-date";
+      if(!seen[key]) { seen[key]=true; groups.push({ key, leads:[] }); }
+      groups[groups.length-1].leads.push(lead);
+    });
+    return groups;
+  },[filtered]);
+
   const confirmedVal = fyLeads.filter(l=>l.stage==="Confirmed").reduce((s,l)=>s+Number(l.value||0),0);
   const pipelineTotal = filtered.reduce((s,l)=>s+Number(l.value||0),0);
   const warmVal      = fyLeads.filter(l=>l.stage==="Proposal Sent").reduce((s,l)=>s+Number(l.value||0),0);
@@ -2589,7 +2635,32 @@ function EventTracker() {
                 </thead>
                 <tbody>
                   {filtered.length===0&&<tr><td colSpan={13}><div className="empty-state"><svg width="80" height="80" viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="38" fill="#f0f0ff" stroke="#e0e7ff" strokeWidth="2"/><rect x="22" y="28" width="36" height="28" rx="4" fill="#e0e7ff"/><rect x="28" y="36" width="24" height="3" rx="1.5" fill="#a5b4fc"/><rect x="28" y="43" width="16" height="3" rx="1.5" fill="#c7d2fe"/><circle cx="56" cy="26" r="8" fill="#6366f1"/><path d="M53 26h6M56 23v6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg><div style={{fontSize:15,fontWeight:700,color:"#4338ca"}}>No events match your filters</div><div style={{fontSize:13,color:"#9ca3af",maxWidth:260}}>Try changing the stage, owner filter, or search term to find what you're looking for.</div></div></td></tr>}
-                  {filtered.map(lead=>{
+                  {groupedByMonth.map(({key, leads:monthLeads})=>{
+                    const mc = key!=="no-date" ? getMonthColor(key) : null;
+                    const collapsed = isCollapsed(key);
+                    const past = isMonthPast(key);
+                    const monthTotal = monthLeads.reduce((s,l)=>s+Number(l.value||0),0);
+                    const label = key==="no-date" ? "No Date" : (() => {
+                      const [y,m]=key.split("-"); return new Date(Number(y),Number(m)-1,1).toLocaleDateString("en-GB",{month:"long",year:"numeric"});
+                    })();
+                    return [
+                      // Month header row
+                      <tr key={`hdr-${key}`} onClick={()=>handleMonthToggle(key)}
+                        style={{cursor:"pointer",background:mc?`${mc.bg}`:"#f9fafb",borderTop:"2px solid",borderTopColor:mc?mc.border:"#e5e7eb",userSelect:"none"}}
+                        className="row-hover">
+                        <td colSpan={13} style={{padding:"8px 14px"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10}}>
+                            <span style={{fontSize:13,transition:"transform .2s",display:"inline-block",transform:collapsed?"rotate(-90deg)":"rotate(0deg)",color:mc?.bar||"#6b7280"}}>▾</span>
+                            {mc&&<span style={{width:10,height:10,borderRadius:"50%",background:mc.bar,display:"inline-block",flexShrink:0}}/>}
+                            <span style={{fontWeight:700,fontSize:13,color:mc?.text||"#374151"}}>{label}</span>
+                            {past&&<span style={{fontSize:10,background:"#f3f4f6",color:"#9ca3af",borderRadius:999,padding:"1px 7px",fontWeight:600}}>Past</span>}
+                            <span style={{fontSize:12,color:mc?.text||"#6b7280",opacity:.6,marginLeft:4}}>{monthLeads.length} event{monthLeads.length!==1?"s":""}</span>
+                            {monthTotal>0&&<span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:mc?.text||"#374151",fontWeight:700,marginLeft:"auto",paddingRight:8}}>£{monthTotal.toLocaleString()}</span>}
+                          </div>
+                        </td>
+                      </tr>,
+                      // Lead rows (hidden when collapsed)
+                      ...(!collapsed ? monthLeads.map(lead=>{
                     const sc=STAGE_COLORS[lead.stage]||STAGE_COLORS["New Enquiry"];
                     const isTBC=lead.venue?.trim().toUpperCase()==="TBC";
                     const mc=lead.date?getMonthColor(monthKey(lead.date)):null;
@@ -2663,7 +2734,9 @@ function EventTracker() {
                         </td>
                       </tr>
                     );
-                  })}
+                  }) : [])
+                  ];
+                })}
                 </tbody>
               </table>
               {filtered.length>0&&<div className="pipeline-total"><span style={{fontSize:12,fontWeight:500,color:"#6366f1",opacity:.8}}>Pipeline total ({filtered.length} event{filtered.length!==1?"s":""})</span><span style={{fontSize:16,fontWeight:800,letterSpacing:"-.02em"}}>£{pipelineTotal.toLocaleString()}</span></div>}
