@@ -1976,31 +1976,7 @@ function EventTracker() {
     if(holidays!==null) localStorage.setItem("connectin_holidays", JSON.stringify(holidays));
   },[holidays]);
 
-  // Auto-refresh from Sheets every 60s — keeps all users in sync
-  useEffect(()=>{
-    const interval = setInterval(async()=>{
-      if(!loadedRef.current) return;  // not loaded yet
-      if(saveTimer.current) return;   // save in flight — skip to avoid race
-      if(saving) return;
-      try {
-        const res = await fetch(SHEET_URL);
-        const data = await res.json();
-        if(Array.isArray(data.leads) && data.leads.length > 0) {
-          const STAGE_MIGRATE = {"New":"New Enquiry","Contacted":"New Enquiry","Qualified":"New Enquiry","Proposal":"Proposal Sent","Closed Won":"Confirmed"};
-          const seen = new Set();
-          const fresh = data.leads
-            .map(l=>({...l, files: typeof l.files==="string"?(() => { try{return JSON.parse(l.files);}catch{return[];} })():(l.files||[]), classCode:l.classCode||"", stage: STAGE_MIGRATE[l.stage]||l.stage||"New Enquiry"}))
-            .filter(l=>{ if(seen.has(String(l.id))) return false; seen.add(String(l.id)); return true; });
-          sheetLeadCountRef.current = fresh.length;
-          setLeads(fresh);
-          localStorage.setItem("connectin_leads", JSON.stringify(fresh));
-        }
-        if(Array.isArray(data.prospects) && data.prospects.length >= 0) setProspects(data.prospects);
-        if(Array.isArray(data.holidays)  && data.holidays.length  >= 0) setHolidays(data.holidays);
-      } catch(_) { /* silent — network blip shouldn't disrupt the user */ }
-    }, 60000);
-    return ()=>clearInterval(interval);
-  },[saving]);
+  // NOTE: auto-refresh removed — it was triggering saves of stale data
 
   // Save to Google Sheets (debounced) — only fires AFTER initial load is done
   useEffect(()=>{
