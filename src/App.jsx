@@ -1889,6 +1889,9 @@ function EventTracker() {
   const loadedRef = useRef(false);
   // Track how many leads Sheets had at load time — saves with fewer entries are blocked
   const sheetLeadCountRef = useRef(0);
+  // Version token for optimistic locking — GAS increments on every save; conflict if mismatch
+  const [sheetVersion, setSheetVersion] = useState("");
+  const [conflictWarning, setConflictWarning] = useState(false);
 
   // Load from Google Sheets — Sheet is ALWAYS the source of truth
   useEffect(()=>{
@@ -1911,17 +1914,22 @@ function EventTracker() {
           setLeads(sheetLeads);
           localStorage.setItem("connectin_leads", JSON.stringify(sheetLeads));
 
-          // Daily backup — once per calendar day, snapshot to Backups sheet
-          const today = new Date().toISOString().slice(0,10);
-          if (localStorage.getItem("connectin_last_backup") !== today) {
-            const owners = Array.isArray(data.owners) ? data.owners : DEFAULT_OWNERS;
-            const prospects = Array.isArray(data.prospects) ? data.prospects : [];
+          // Store version for optimistic-lock conflict detection
+          if (data.version) setSheetVersion(data.version);
+
+          // Backup every 30 minutes (not just once a day) for faster recovery window
+          const lastBackupTs = Number(localStorage.getItem("connectin_last_backup_ts") || 0);
+          const BACKUP_INTERVAL_MS = 30 * 60 * 1000;
+          if (Date.now() - lastBackupTs > BACKUP_INTERVAL_MS) {
+            const backupOwners = Array.isArray(data.owners) ? data.owners : DEFAULT_OWNERS;
+            const backupProspects = Array.isArray(data.prospects) ? data.prospects : [];
+            const backupHolidays = Array.isArray(data.holidays) ? data.holidays : [];
             fetch(SHEET_URL, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "backup", leads: sheetLeads, owners, prospects }),
+              body: JSON.stringify({ action: "backup", leads: sheetLeads, owners: backupOwners, prospects: backupProspects, holidays: backupHolidays }),
             }).then(r => r.json()).then(r => {
-              if (r.ok) localStorage.setItem("connectin_last_backup", today);
+              if (r.ok) localStorage.setItem("connectin_last_backup_ts", String(Date.now()));
             }).catch(() => {}); // silent — backup failure never interrupts the app
           }
         } else {
@@ -2002,19 +2010,40 @@ function EventTracker() {
           return;
         }
 
-        console.log("[SAVE] sending", leadsToSave.length, "leads to Sheets");
-        const saveRes = await fetch(SHEET_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads:leadsToSave,owners,prospects,holidays})});
+        console.log("[SAVE] sending", leadsToSave.length, "leads to Sheets (version:", sheetVersion, ")");
+        const saveRes = await fetch(SHEET_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads:leadsToSave,owners,prospects,holidays,version:sheetVersion})});
         const saveText = await saveRes.text();
         console.log("[SAVE] response:", saveRes.status, saveText.substring(0, 200));
 
+        let saveJson = null;
+        try { saveJson = JSON.parse(saveText); } catch { saveJson = null; }
+
+        // Conflict: another user saved while this tab was open — reload their version
+        if (saveJson && saveJson.conflict) {
+          console.warn("[SAVE] CONFLICT — another session saved first. Reloading from Sheets.");
+          setConflictWarning(true);
+          // Re-load from Sheets to get the latest data (their save + our pending change may differ)
+          try {
+            const fresh = await fetch(SHEET_URL).then(r => r.json());
+            if (Array.isArray(fresh.leads) && fresh.leads.length > 0) {
+              setLeads(fresh.leads);
+              sheetLeadCountRef.current = fresh.leads.length;
+              if (fresh.version) setSheetVersion(fresh.version);
+            }
+          } catch(_) {}
+          setTimeout(() => setConflictWarning(false), 8000);
+          return;
+        }
+
         // Only proceed if Sheets explicitly confirmed success
-        let saveOk = false;
-        try { saveOk = JSON.parse(saveText).success === true; } catch { saveOk = false; }
-        if (!saveOk) {
+        if (!saveJson || saveJson.success !== true) {
           console.error("[SAVE] Sheets did not confirm success — save error shown");
           setSaveError(true);
           return;
         }
+
+        // Update our version token from the confirmed save
+        if (saveJson.version) setSheetVersion(saveJson.version);
 
         // Verify: read back from Sheets immediately and confirm count matches what was sent
         const verifyRes = await fetch(SHEET_URL);
@@ -2407,7 +2436,8 @@ function EventTracker() {
             </div>
             {saving&&<span style={{fontSize:11,color:"#f59e0b",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:999,padding:"2px 10px",fontWeight:700,whiteSpace:"nowrap"}}>⏳ Saving…</span>}
             {!saving&&saveError&&<span style={{fontSize:11,color:"#ef4444",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:999,padding:"2px 10px",fontWeight:700,whiteSpace:"nowrap"}}>⚠️ Save failed</span>}
-            {!saving&&!saveError&&lastSaved&&<span key={lastSaved.getTime()} className="save-badge" style={{fontSize:11,color:"#22c55e",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:999,padding:"2px 10px",fontWeight:700,whiteSpace:"nowrap"}}>✓ Saved</span>}
+            {!saving&&conflictWarning&&<span style={{fontSize:11,color:"#7c3aed",background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:999,padding:"2px 10px",fontWeight:700,whiteSpace:"nowrap"}}>🔄 Another user saved — reloaded latest</span>}
+            {!saving&&!saveError&&!conflictWarning&&lastSaved&&<span key={lastSaved.getTime()} className="save-badge" style={{fontSize:11,color:"#22c55e",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:999,padding:"2px 10px",fontWeight:700,whiteSpace:"nowrap"}}>✓ Saved</span>}
           </div>
           <div className="app-header-right">
             <div style={{display:"flex",gap:6}}>
