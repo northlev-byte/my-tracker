@@ -364,6 +364,77 @@ function DateRangeCell({ startDate, endDate, onSaveStart, onSaveEnd }) {
 }
 
 // ── Monthly Tracker ───────────────────────────────────────
+function TargetTracker({ confirmed, warm, target, onSetTarget, fyLabel }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const pctReal  = target > 0 ? (confirmed / target) * 100 : 0;
+  const pct      = Math.min(100, pctReal);
+  const pctWarm  = target > 0 ? Math.min(100 - pct, (warm / target) * 100) : 0;
+  const remaining = Math.max(0, target - confirmed);
+  const hit = target > 0 && confirmed >= target;
+
+  function commitTarget() {
+    const amt = Number(draft.replace(/[^0-9]/g, "")) || 0;
+    if (amt > 0) onSetTarget(amt);
+    setEditing(false);
+  }
+
+  if (target <= 0 && !editing) {
+    return (
+      <div style={{background:"#fff",border:"1.5px dashed #d1d5db",borderRadius:12,padding:"12px 20px",marginBottom:22,display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:16}}>🎯</span>
+        <span style={{fontSize:13,color:"#6b7280"}}>No revenue target set for {fyLabel}</span>
+        <button onClick={()=>{setDraft("");setEditing(true);}} style={{background:"#111827",color:"#fff",border:"none",borderRadius:8,padding:"5px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Set target</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:"16px 20px",marginBottom:22}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",flexWrap:"wrap",gap:8,marginBottom:10}}>
+        <div style={{fontSize:13,fontWeight:700,color:"#111827",display:"flex",alignItems:"center",gap:6}}>
+          <span>🎯 {fyLabel} Target:</span>
+          {editing ? (
+            <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
+              <span style={{color:"#6b7280"}}>£</span>
+              <input autoFocus value={draft}
+                onChange={e=>setDraft(e.target.value.replace(/[^0-9]/g,""))}
+                onKeyDown={e=>{ if(e.key==="Enter") commitTarget(); if(e.key==="Escape") setEditing(false); }}
+                onBlur={commitTarget}
+                style={{width:100,fontSize:13,fontWeight:700,fontFamily:"'DM Mono',monospace",border:"1.5px solid #111827",borderRadius:6,padding:"2px 6px",outline:"none"}}/>
+            </span>
+          ) : (
+            <>
+              <span style={{fontFamily:"'DM Mono',monospace"}}>£{target.toLocaleString()}</span>
+              <button onClick={()=>{setDraft(String(target));setEditing(true);}} title="Edit target"
+                style={{background:"none",border:"none",cursor:"pointer",fontSize:12,opacity:.45,padding:2}}>✏️</button>
+            </>
+          )}
+        </div>
+        <div style={{fontSize:12,color:"#6b7280"}}>
+          <b style={{color:"#15803d",fontFamily:"'DM Mono',monospace"}}>£{confirmed.toLocaleString()}</b> confirmed
+          {warm > 0 && <> · <b style={{color:"#7c3aed",fontFamily:"'DM Mono',monospace"}}>£{warm.toLocaleString()}</b> warm</>}
+          {" · "}
+          {hit
+            ? <b style={{color:"#15803d"}}>Target hit! 🎉</b>
+            : <><b style={{fontFamily:"'DM Mono',monospace",color:"#111827"}}>£{remaining.toLocaleString()}</b> to go</>}
+        </div>
+      </div>
+      <div style={{position:"relative",height:14,background:"#f3f4f6",borderRadius:999,overflow:"hidden"}}>
+        <div style={{position:"absolute",top:0,bottom:0,left:0,width:`${pct}%`,background:"linear-gradient(90deg,#0d3d2a,#16a34a)",borderRadius:999,transition:"width .5s ease"}}/>
+        {pctWarm > 0 && <div style={{position:"absolute",top:0,bottom:0,left:`${pct}%`,width:`${pctWarm}%`,background:"#a78bfa",opacity:.45,transition:"width .5s ease, left .5s ease"}}/>}
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:11,color:"#9ca3af"}}>
+        <span>
+          {Math.round(pctReal)}% confirmed
+          {warm > 0 && target > 0 && <> · {Math.round(((confirmed + warm) / target) * 100)}% incl. warm pipeline</>}
+        </span>
+        <span style={{fontFamily:"'DM Mono',monospace"}}>£{target.toLocaleString()}</span>
+      </div>
+    </div>
+  );
+}
+
 function MonthlyTracker({ leads, fyMonths }) {
   const today = new Date();
   const currentKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
@@ -1875,6 +1946,7 @@ function EventTracker() {
   const [activeTab, setActiveTab]           = useState("events"); // events | lost | holidays
   const [prospects, setProspects]           = useState(null);
   const [holidays,  setHolidays]            = useState(null);
+  const [targets,   setTargets]             = useState(null); // { fyId: amount } — FY revenue targets
   const [saving, setSaving]                 = useState(false);
   const [lastSaved, setLastSaved]           = useState(null);
   const [saveError, setSaveError]           = useState(false);
@@ -1896,6 +1968,7 @@ function EventTracker() {
   const ownersBaselineRef    = useRef("");
   const prospectsBaselineRef = useRef("");
   const holidaysBaselineRef  = useRef("");
+  const targetsBaselineRef   = useRef("");
   const [conflictWarning, setConflictWarning] = useState(false);
 
   // Load from Supabase — the database is the source of truth
@@ -1934,6 +2007,11 @@ function EventTracker() {
         setHolidays(dbHolidays);
         localStorage.setItem("connectin_holidays", JSON.stringify(dbHolidays));
 
+        const dbTargets = (cfg.targets && typeof cfg.targets === "object" && !Array.isArray(cfg.targets)) ? cfg.targets : { fy2627: 600000 };
+        targetsBaselineRef.current = JSON.stringify(dbTargets);
+        setTargets(dbTargets);
+        localStorage.setItem("connectin_targets", JSON.stringify(dbTargets));
+
         // Independent 30-min backup to the old Sheets Backups tab — belt and braces
         const lastBackupTs = Number(localStorage.getItem("connectin_last_backup_ts") || 0);
         if (Date.now() - lastBackupTs > 30 * 60 * 1000) {
@@ -1955,6 +2033,7 @@ function EventTracker() {
         setProspects(JSON.parse(localStorage.getItem("connectin_prospects") || "[]"));
         const seedHols = HOLIDAYS_2627.map((h,i)=>({...h,id:`base-${i}`}));
         setHolidays(JSON.parse(localStorage.getItem("connectin_holidays") || JSON.stringify(seedHols)));
+        setTargets(JSON.parse(localStorage.getItem("connectin_targets") || "null") || { fy2627: 600000 });
         // loadedFromDbRef stays false — saves blocked until a successful reload
         setSaveError(true);
       } finally {
@@ -2011,6 +2090,13 @@ function EventTracker() {
             setHolidays(value);
           }
         }
+        if (key === "targets" && value && typeof value === "object" && !Array.isArray(value)) {
+          const json = JSON.stringify(value);
+          if (json !== targetsBaselineRef.current) {
+            targetsBaselineRef.current = json;
+            setTargets(value);
+          }
+        }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -2029,13 +2115,16 @@ function EventTracker() {
   useEffect(()=>{
     if(holidays!==null) localStorage.setItem("connectin_holidays", JSON.stringify(holidays));
   },[holidays]);
+  useEffect(()=>{
+    if(targets!==null) localStorage.setItem("connectin_targets", JSON.stringify(targets));
+  },[targets]);
 
   // NOTE: auto-refresh removed — it was triggering saves of stale data
 
   // Save to Supabase (debounced, diff-based) — only rows that actually changed are
   // written, so two users editing different events can never overwrite each other.
   useEffect(()=>{
-    if(leads===null||owners===null||prospects===null||holidays===null) return;
+    if(leads===null||owners===null||prospects===null||holidays===null||targets===null) return;
     if(!loadedRef.current) return; // Don't save during initial load
     if(!loadedFromDbRef.current) return; // DB unreachable on load — block saves of stale cache
     if(saveTimer.current) clearTimeout(saveTimer.current);
@@ -2100,12 +2189,17 @@ function EventTracker() {
           if (error) throw error;
           holidaysBaselineRef.current = JSON.stringify(holidays);
         }
+        if (JSON.stringify(targets) !== targetsBaselineRef.current) {
+          const { error } = await supabase.from("app_config").upsert({ key: "targets", value: targets, updated_at: new Date().toISOString() });
+          if (error) throw error;
+          targetsBaselineRef.current = JSON.stringify(targets);
+        }
 
         setLastSaved(new Date());
       } catch(err) { console.error("[SAVE] exception:", err); setSaveError(true); }
       finally { setSaving(false); }
     },1000);
-  },[leads,owners,prospects,holidays]);
+  },[leads,owners,prospects,holidays,targets]);
 
   // Filter leads to current FY (or all leads if "all" selected)
   const fyLeads = useMemo(()=>{
@@ -2572,6 +2666,15 @@ function EventTracker() {
           </div>
         )}
 
+        {activeTab==="events"&&activeFY!=="all"&&(
+          <TargetTracker
+            confirmed={confirmedVal}
+            warm={warmVal}
+            target={Number((targets||{})[activeFY]) || 0}
+            onSetTarget={amt=>setTargets(t=>({ ...(t||{}), [activeFY]: amt }))}
+            fyLabel={currentFY.label}
+          />
+        )}
         {activeTab==="events"&&<MonthlyTracker leads={fyLeads.filter(l=>l.stage!=="Closed Lost")} fyMonths={currentFY.months} />}
 
         {activeTab==="events"&&<>
