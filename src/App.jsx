@@ -2493,7 +2493,7 @@ function EventTracker() {
   /* ── Table header ────────────────────────────────── */
   .th{padding:10px 10px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
   .th-lead{color:#a78bfa}
-  .thead-sticky th{position:sticky;top:58px;z-index:5;background:#fafafa}
+  .thead-sticky th{position:sticky;top:0;z-index:5;background:#fafafa}
 
   /* ── FY tabs ─────────────────────────────────────── */
   .fy-tab{padding:7px 16px;border-radius:8px;border:1.5px solid #e5e7eb;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;background:#fff;color:#6b7280;white-space:nowrap}
@@ -2529,7 +2529,7 @@ function EventTracker() {
   .leads-table-wrap::-webkit-scrollbar{height:6px}
   .leads-table-wrap::-webkit-scrollbar-track{background:#f1f5f9}
   .leads-table-wrap::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
-  @media(min-width:1000px){.leads-table-wrap{overflow-x:visible}}
+  @media(min-width:769px){.leads-table-wrap{overflow:auto;max-height:calc(100vh - 150px)}}
   .leads-cards{display:none}
   .controls-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
   .controls-search{flex:1;min-width:180px;position:relative}
@@ -2859,13 +2859,13 @@ function EventTracker() {
                         style={{cursor:"pointer",background:darkMode?"#243044":(mc?mc.bg:"#f9fafb"),borderTop:"2px solid",borderTopColor:darkMode?"#334155":(mc?mc.border:"#e5e7eb"),userSelect:"none"}}
                         className="row-hover month-hdr">
                         <td colSpan={14} style={{padding:"8px 14px"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10,position:"sticky",left:14,width:"fit-content"}}>
                             <span style={{fontSize:13,transition:"transform .2s",display:"inline-block",transform:collapsed?"rotate(-90deg)":"rotate(0deg)",color:mc?.bar||"#6b7280"}}>▾</span>
                             {mc&&<span style={{width:10,height:10,borderRadius:"50%",background:mc.bar,display:"inline-block",flexShrink:0}}/>}
                             <span style={{fontWeight:700,fontSize:13,color:darkMode?"#cbd5e1":(mc?.text||"#374151")}}>{label}</span>
                             {past&&<span style={{fontSize:10,background:"#f3f4f6",color:"#9ca3af",borderRadius:999,padding:"1px 7px",fontWeight:600}}>Past</span>}
                             <span style={{fontSize:12,color:darkMode?"#94a3b8":(mc?.text||"#6b7280"),opacity:.6,marginLeft:4}}>{monthLeads.length} event{monthLeads.length!==1?"s":""}</span>
-                            {monthTotal>0&&<span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:darkMode?"#cbd5e1":(mc?.text||"#374151"),fontWeight:700,marginLeft:"auto",paddingRight:8}}>£{monthTotal.toLocaleString()}</span>}
+                            {monthTotal>0&&<span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:darkMode?"#cbd5e1":(mc?.text||"#374151"),fontWeight:700,marginLeft:6}}>· £{monthTotal.toLocaleString()}</span>}
                           </div>
                         </td>
                       </tr>,
