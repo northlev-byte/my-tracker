@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { supabase, mapToDb, mapFromDb } from "./lib/supabase";
 
 const PASSWORD = "ConnectinEvents";
 
@@ -1887,89 +1888,76 @@ function EventTracker() {
 
   // Track whether initial load is complete — prevents save firing before load finishes
   const loadedRef = useRef(false);
-  // Only true when Sheets was successfully reached — saves are blocked if load fell back to localStorage
-  const loadedFromSheetsRef = useRef(false);
-  // Track how many leads Sheets had at load time — saves with fewer entries are blocked
-  const sheetLeadCountRef = useRef(0);
-  // Version token for optimistic locking — GAS increments on every save; conflict if mismatch
-  const [sheetVersion, setSheetVersion] = useState("");
+  // Only true when Supabase was successfully reached — saves are blocked if load fell back to localStorage
+  const loadedFromDbRef = useRef(false);
+  // Baselines of what the DB currently holds — saves write only the diff against these,
+  // so two users editing different rows can never overwrite each other's work
+  const baselineRef          = useRef(new Map());
+  const ownersBaselineRef    = useRef("");
+  const prospectsBaselineRef = useRef("");
+  const holidaysBaselineRef  = useRef("");
   const [conflictWarning, setConflictWarning] = useState(false);
 
-  // Load from Google Sheets — Sheet is ALWAYS the source of truth
+  // Load from Supabase — the database is the source of truth
   useEffect(()=>{
     async function load() {
       try {
-        const res = await fetch(SHEET_URL);
-        const data = await res.json();
-        // Sheets is the single source of truth — use it directly, overwrite localStorage
-        if (Array.isArray(data.leads) && data.leads.length > 0) {
-          console.log("[LOAD] raw fields from Sheets (first lead):", Object.keys(data.leads[0] || {}));
-          console.log("[LOAD] raw first lead from Sheets:", JSON.parse(JSON.stringify(data.leads[0] || {})));
-          const STAGE_MIGRATE = {"New":"New Enquiry","Contacted":"New Enquiry","Qualified":"New Enquiry","Proposal":"Proposal Sent","Closed Won":"Confirmed"};
-          const seen = new Set();
-          const sheetLeads = data.leads
-            .map(l=>({...l, files: typeof l.files==="string" ? (() => { try { return JSON.parse(l.files); } catch { return []; } })() : (l.files||[]), classCode:l.classCode||"", stage: STAGE_MIGRATE[l.stage]||l.stage||"New Enquiry"}))
-            .filter(l=>{ if(seen.has(String(l.id))) return false; seen.add(String(l.id)); return true; });
-          console.log("[LOAD] processed first lead (after mapping):", JSON.parse(JSON.stringify(sheetLeads[0] || {})));
-          console.log("[LOAD] total leads loaded from Sheets:", sheetLeads.length);
-          sheetLeadCountRef.current = sheetLeads.length;
-          loadedFromSheetsRef.current = true; // Sheets reached — saves now allowed
-          setLeads(sheetLeads);
-          localStorage.setItem("connectin_leads", JSON.stringify(sheetLeads));
+        const [evRes, ownRes, cfgRes] = await Promise.all([
+          supabase.from("events").select("*").order("id", { ascending: true }),
+          supabase.from("owners").select("*").order("sort_order", { ascending: true }),
+          supabase.from("app_config").select("*"),
+        ]);
+        if (evRes.error) throw evRes.error;
+        if (ownRes.error) throw ownRes.error;
+        if (cfgRes.error) throw cfgRes.error;
 
-          // Store version for optimistic-lock conflict detection
-          if (data.version) setSheetVersion(data.version);
+        const dbLeads = (evRes.data || []).map(mapFromDb);
+        console.log("[LOAD] leads from Supabase:", dbLeads.length);
+        baselineRef.current = new Map(dbLeads.map(l => [l.id, JSON.stringify(mapToDb(l))]));
+        loadedFromDbRef.current = true; // DB reached — saves now allowed
+        setLeads(dbLeads);
+        localStorage.setItem("connectin_leads", JSON.stringify(dbLeads));
 
-          // Backup every 30 minutes (not just once a day) for faster recovery window
-          const lastBackupTs = Number(localStorage.getItem("connectin_last_backup_ts") || 0);
-          const BACKUP_INTERVAL_MS = 30 * 60 * 1000;
-          if (Date.now() - lastBackupTs > BACKUP_INTERVAL_MS) {
-            const backupOwners = Array.isArray(data.owners) ? data.owners : DEFAULT_OWNERS;
-            const backupProspects = Array.isArray(data.prospects) ? data.prospects : [];
-            const backupHolidays = Array.isArray(data.holidays) ? data.holidays : [];
-            fetch(SHEET_URL, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "backup", leads: sheetLeads, owners: backupOwners, prospects: backupProspects, holidays: backupHolidays }),
-            }).then(r => r.json()).then(r => {
-              if (r.ok) localStorage.setItem("connectin_last_backup_ts", String(Date.now()));
-            }).catch(() => {}); // silent — backup failure never interrupts the app
-          }
-        } else {
-          // Sheets empty — fall back to localStorage, then hardcoded seed data
-          const cached = localStorage.getItem("connectin_leads");
-          setLeads(cached ? JSON.parse(cached) : REAL_DATA);
-        }
-        setOwners(Array.isArray(data.owners)&&data.owners.length>0 ? data.owners : DEFAULT_OWNERS);
-        // Sheets is source of truth for prospects too
-        if (Array.isArray(data.prospects) && data.prospects.length > 0) {
-          setProspects(data.prospects);
-          localStorage.setItem("connectin_prospects", JSON.stringify(data.prospects));
-        } else {
-          setProspects(JSON.parse(localStorage.getItem("connectin_prospects") || "[]"));
-        }
-        // Holidays — seed from hardcoded if none saved yet
+        const ownerNames = (ownRes.data || []).map(o => o.name);
+        ownersBaselineRef.current = JSON.stringify(ownerNames);
+        setOwners(ownerNames.length > 0 ? ownerNames : DEFAULT_OWNERS);
+
+        const cfg = Object.fromEntries((cfgRes.data || []).map(r => [r.key, r.value]));
+        const dbProspects = Array.isArray(cfg.prospects) ? cfg.prospects : [];
+        prospectsBaselineRef.current = JSON.stringify(dbProspects);
+        setProspects(dbProspects);
+        localStorage.setItem("connectin_prospects", JSON.stringify(dbProspects));
+
         const seedHols = HOLIDAYS_2627.map((h,i)=>({...h,id:`base-${i}`}));
-        if (Array.isArray(data.holidays) && data.holidays.length > 0) {
-          setHolidays(data.holidays);
-          localStorage.setItem("connectin_holidays", JSON.stringify(data.holidays));
-        } else {
-          const cached = localStorage.getItem("connectin_holidays");
-          setHolidays(cached ? JSON.parse(cached) : seedHols);
+        const dbHolidays = Array.isArray(cfg.holidays) && cfg.holidays.length > 0 ? cfg.holidays : seedHols;
+        holidaysBaselineRef.current = JSON.stringify(dbHolidays);
+        setHolidays(dbHolidays);
+        localStorage.setItem("connectin_holidays", JSON.stringify(dbHolidays));
+
+        // Independent 30-min backup to the old Sheets Backups tab — belt and braces
+        const lastBackupTs = Number(localStorage.getItem("connectin_last_backup_ts") || 0);
+        if (Date.now() - lastBackupTs > 30 * 60 * 1000) {
+          fetch(SHEET_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "backup", leads: dbLeads, owners: ownerNames, prospects: dbProspects, holidays: dbHolidays }),
+          }).then(r => r.json()).then(r => {
+            if (r.ok) localStorage.setItem("connectin_last_backup_ts", String(Date.now()));
+          }).catch(() => {}); // silent — backup failure never interrupts the app
         }
-      } catch {
-        // Sheet unreachable — show cached data so the UI isn't blank, but DO NOT allow saves
-        // (saving localStorage data back to Sheets would overwrite everyone else's live data)
+      } catch (err) {
+        console.error("[LOAD] Supabase unreachable:", err);
+        // Show cached data so the UI isn't blank, but DO NOT allow saves
+        // (saving localStorage data back would overwrite everyone else's live data)
         const cachedLeads = localStorage.getItem("connectin_leads");
         setLeads(cachedLeads ? JSON.parse(cachedLeads) : REAL_DATA);
         setOwners(JSON.parse(localStorage.getItem("connectin_owners") || "null") || DEFAULT_OWNERS);
         setProspects(JSON.parse(localStorage.getItem("connectin_prospects") || "[]"));
         const seedHols = HOLIDAYS_2627.map((h,i)=>({...h,id:`base-${i}`}));
         setHolidays(JSON.parse(localStorage.getItem("connectin_holidays") || JSON.stringify(seedHols)));
-        // loadedFromSheetsRef stays false — saves will be blocked until a successful reload
-        setSaveError(true); // show the error banner so the user knows Sheets is unreachable
+        // loadedFromDbRef stays false — saves blocked until a successful reload
+        setSaveError(true);
       } finally {
-        // Mark load attempt as complete — UI can render
         loadedRef.current = true;
       }
     }
@@ -1992,83 +1980,79 @@ function EventTracker() {
 
   // NOTE: auto-refresh removed — it was triggering saves of stale data
 
-  // Save to Google Sheets (debounced) — only fires AFTER initial load is done
+  // Save to Supabase (debounced, diff-based) — only rows that actually changed are
+  // written, so two users editing different events can never overwrite each other.
   useEffect(()=>{
     if(leads===null||owners===null||prospects===null||holidays===null) return;
     if(!loadedRef.current) return; // Don't save during initial load
-    if(!loadedFromSheetsRef.current) return; // Don't save if Sheets was unreachable on load — would overwrite live data with stale cache
+    if(!loadedFromDbRef.current) return; // DB unreachable on load — block saves of stale cache
     if(saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current=setTimeout(async()=>{
       setSaving(true); setSaveError(false);
       try {
-        // Strip base64 data from files before saving — only keep Drive URLs
-        const leadsToSave = leads.map(l => ({
+        // Strip in-progress uploads / base64 from files before saving
+        const cleanLeads = leads.map(l => ({
           ...l,
           files: (l.files||[])
             .filter(f => !f.uploading)
             .map(f => ({ id: f.id, name: f.name, size: f.size, type: f.type || "", driveUrl: f.driveUrl || null })),
         }));
 
-        // Drop guard: block any save that would reduce the Sheets count by more than 5 at once
-        const drop = sheetLeadCountRef.current - leadsToSave.length;
-        if (sheetLeadCountRef.current > 0 && drop > 5) {
-          console.error(`[SAVE] BLOCKED — would drop from ${sheetLeadCountRef.current} to ${leadsToSave.length} leads. Save aborted.`);
+        // Diff against what the DB currently holds
+        const baseline = baselineRef.current;
+        const currentIds = new Set(cleanLeads.map(l => l.id));
+        const changed = [];
+        for (const l of cleanLeads) {
+          const db = mapToDb(l);
+          if (baseline.get(l.id) !== JSON.stringify(db)) changed.push(db);
+        }
+        const deletedIds = [...baseline.keys()].filter(id => !currentIds.has(id));
+
+        // Drop guard — never mass-delete
+        if (deletedIds.length > 5) {
+          console.error(`[SAVE] BLOCKED — would delete ${deletedIds.length} events at once. Save aborted.`);
           setSaveError(true);
           return;
         }
 
-        console.log("[SAVE] sending", leadsToSave.length, "leads to Sheets (version:", sheetVersion, ")");
-        const saveRes = await fetch(SHEET_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads:leadsToSave,owners,prospects,holidays,version:sheetVersion})});
-        const saveText = await saveRes.text();
-        console.log("[SAVE] response:", saveRes.status, saveText.substring(0, 200));
+        if (changed.length > 0) {
+          console.log("[SAVE] upserting", changed.length, "changed event(s)");
+          const { error } = await supabase.from("events").upsert(changed);
+          if (error) throw error;
+        }
+        if (deletedIds.length > 0) {
+          console.log("[SAVE] deleting event(s):", deletedIds);
+          const { error } = await supabase.from("events").delete().in("id", deletedIds);
+          if (error) throw error;
+        }
+        // Baseline confirmed only after the DB accepted the writes
+        baselineRef.current = new Map(cleanLeads.map(l => [l.id, JSON.stringify(mapToDb(l))]));
 
-        let saveJson = null;
-        try { saveJson = JSON.parse(saveText); } catch { saveJson = null; }
-
-        // Conflict: another user saved while this tab was open — reload their version
-        if (saveJson && saveJson.conflict) {
-          console.warn("[SAVE] CONFLICT — another session saved first. Reloading from Sheets.");
-          setConflictWarning(true);
-          // Re-load from Sheets to get the latest data (their save + our pending change may differ)
-          try {
-            const fresh = await fetch(SHEET_URL).then(r => r.json());
-            if (Array.isArray(fresh.leads) && fresh.leads.length > 0) {
-              setLeads(fresh.leads);
-              sheetLeadCountRef.current = fresh.leads.length;
-              if (fresh.version) setSheetVersion(fresh.version);
-            }
-          } catch(_) {}
-          setTimeout(() => setConflictWarning(false), 8000);
-          return;
+        // Owners — tiny table, replace only when changed
+        if (JSON.stringify(owners) !== ownersBaselineRef.current) {
+          const { error: delErr } = await supabase.from("owners").delete().gte("id", 0);
+          if (delErr) throw delErr;
+          const { error: insErr } = await supabase.from("owners").insert(owners.map((name, i) => ({ name, sort_order: i })));
+          if (insErr) throw insErr;
+          ownersBaselineRef.current = JSON.stringify(owners);
         }
 
-        // Only proceed if Sheets explicitly confirmed success
-        if (!saveJson || saveJson.success !== true) {
-          console.error("[SAVE] Sheets did not confirm success — save error shown");
-          setSaveError(true);
-          return;
+        // Prospects / holidays — single JSON rows in app_config, written only when changed
+        if (JSON.stringify(prospects) !== prospectsBaselineRef.current) {
+          const { error } = await supabase.from("app_config").upsert({ key: "prospects", value: prospects, updated_at: new Date().toISOString() });
+          if (error) throw error;
+          prospectsBaselineRef.current = JSON.stringify(prospects);
+        }
+        if (JSON.stringify(holidays) !== holidaysBaselineRef.current) {
+          const { error } = await supabase.from("app_config").upsert({ key: "holidays", value: holidays, updated_at: new Date().toISOString() });
+          if (error) throw error;
+          holidaysBaselineRef.current = JSON.stringify(holidays);
         }
 
-        // Update our version token from the confirmed save
-        if (saveJson.version) setSheetVersion(saveJson.version);
-
-        // Verify: read back from Sheets immediately and confirm count matches what was sent
-        const verifyRes = await fetch(SHEET_URL);
-        const verifyData = await verifyRes.json();
-        const sheetCount = Array.isArray(verifyData.leads) ? verifyData.leads.length : 0;
-        console.log(`[SAVE VERIFY] sent ${leadsToSave.length} | Sheets now has ${sheetCount}`);
-        if (sheetCount !== leadsToSave.length) {
-          console.error(`[SAVE VERIFY] MISMATCH — sent ${leadsToSave.length}, Sheets returned ${sheetCount}. localStorage NOT updated.`);
-          setSaveError(true);
-          return;
-        }
-
-        // All checks passed — safe to confirm
-        sheetLeadCountRef.current = leadsToSave.length;
         setLastSaved(new Date());
       } catch(err) { console.error("[SAVE] exception:", err); setSaveError(true); }
       finally { setSaving(false); }
-    },1500);
+    },1000);
   },[leads,owners,prospects,holidays]);
 
   // Filter leads to current FY (or all leads if "all" selected)
