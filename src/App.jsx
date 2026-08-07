@@ -1887,6 +1887,8 @@ function EventTracker() {
 
   // Track whether initial load is complete — prevents save firing before load finishes
   const loadedRef = useRef(false);
+  // Only true when Sheets was successfully reached — saves are blocked if load fell back to localStorage
+  const loadedFromSheetsRef = useRef(false);
   // Track how many leads Sheets had at load time — saves with fewer entries are blocked
   const sheetLeadCountRef = useRef(0);
   // Version token for optimistic locking — GAS increments on every save; conflict if mismatch
@@ -1911,6 +1913,7 @@ function EventTracker() {
           console.log("[LOAD] processed first lead (after mapping):", JSON.parse(JSON.stringify(sheetLeads[0] || {})));
           console.log("[LOAD] total leads loaded from Sheets:", sheetLeads.length);
           sheetLeadCountRef.current = sheetLeads.length;
+          loadedFromSheetsRef.current = true; // Sheets reached — saves now allowed
           setLeads(sheetLeads);
           localStorage.setItem("connectin_leads", JSON.stringify(sheetLeads));
 
@@ -1955,15 +1958,18 @@ function EventTracker() {
           setHolidays(cached ? JSON.parse(cached) : seedHols);
         }
       } catch {
-        // Sheet unreachable — restore from localStorage so user data isn't lost
+        // Sheet unreachable — show cached data so the UI isn't blank, but DO NOT allow saves
+        // (saving localStorage data back to Sheets would overwrite everyone else's live data)
         const cachedLeads = localStorage.getItem("connectin_leads");
         setLeads(cachedLeads ? JSON.parse(cachedLeads) : REAL_DATA);
         setOwners(JSON.parse(localStorage.getItem("connectin_owners") || "null") || DEFAULT_OWNERS);
         setProspects(JSON.parse(localStorage.getItem("connectin_prospects") || "[]"));
         const seedHols = HOLIDAYS_2627.map((h,i)=>({...h,id:`base-${i}`}));
         setHolidays(JSON.parse(localStorage.getItem("connectin_holidays") || JSON.stringify(seedHols)));
+        // loadedFromSheetsRef stays false — saves will be blocked until a successful reload
+        setSaveError(true); // show the error banner so the user knows Sheets is unreachable
       } finally {
-        // Mark load as complete — now saves are allowed
+        // Mark load attempt as complete — UI can render
         loadedRef.current = true;
       }
     }
@@ -1990,6 +1996,7 @@ function EventTracker() {
   useEffect(()=>{
     if(leads===null||owners===null||prospects===null||holidays===null) return;
     if(!loadedRef.current) return; // Don't save during initial load
+    if(!loadedFromSheetsRef.current) return; // Don't save if Sheets was unreachable on load — would overwrite live data with stale cache
     if(saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current=setTimeout(async()=>{
       setSaving(true); setSaveError(false);
