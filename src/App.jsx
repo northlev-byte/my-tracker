@@ -1964,6 +1964,58 @@ function EventTracker() {
     load();
   },[]);
 
+  // Realtime — apply other users' changes live. Safe with diff-based saves:
+  // applying a remote row updates the baseline too, so the diff stays empty
+  // and no write ever fires from receiving data.
+  useEffect(()=>{
+    const channel = supabase
+      .channel("live-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const id = payload.old?.id;
+          if (id == null) return;
+          baselineRef.current.delete(id);
+          setLeads(ls => ls === null ? ls : ls.filter(l => l.id !== id));
+        } else {
+          const lead = mapFromDb(payload.new);
+          const incomingJson = JSON.stringify(mapToDb(lead));
+          const prevBaseline = baselineRef.current.get(lead.id);
+          baselineRef.current.set(lead.id, incomingJson);
+          setLeads(ls => {
+            if (ls === null) return ls;
+            const idx = ls.findIndex(l => l.id === lead.id);
+            if (idx === -1) return [...ls, lead]; // new event from another user
+            const localJson = JSON.stringify(mapToDb(ls[idx]));
+            if (localJson === incomingJson) return ls;   // we already have this exact state
+            if (incomingJson === prevBaseline) return ls; // echo of our own save — local may have newer unsaved edits
+            const next = [...ls];
+            next[idx] = lead;
+            return next;
+          });
+        }
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "app_config" }, (payload) => {
+        const key = payload.new?.key;
+        const value = payload.new?.value;
+        if (key === "prospects" && Array.isArray(value)) {
+          const json = JSON.stringify(value);
+          if (json !== prospectsBaselineRef.current) {
+            prospectsBaselineRef.current = json;
+            setProspects(value);
+          }
+        }
+        if (key === "holidays" && Array.isArray(value)) {
+          const json = JSON.stringify(value);
+          if (json !== holidaysBaselineRef.current) {
+            holidaysBaselineRef.current = json;
+            setHolidays(value);
+          }
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  },[]);
+
   // Mirror leads, owners & prospects to localStorage on every change
   useEffect(()=>{
     if(leads!==null) localStorage.setItem("connectin_leads", JSON.stringify(leads));
