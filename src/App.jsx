@@ -381,7 +381,7 @@ function TargetTracker({ confirmed, warm, target, onSetTarget, fyLabel }) {
 
   if (target <= 0 && !editing) {
     return (
-      <div style={{background:"#fff",border:"1.5px dashed #d1d5db",borderRadius:12,padding:"12px 20px",marginBottom:22,display:"flex",alignItems:"center",gap:10}}>
+      <div className="target-tracker" style={{background:"#fff",border:"1.5px dashed #d1d5db",borderRadius:12,padding:"12px 20px",marginBottom:22,display:"flex",alignItems:"center",gap:10}}>
         <span style={{fontSize:16}}>🎯</span>
         <span style={{fontSize:13,color:"#6b7280"}}>No revenue target set for {fyLabel}</span>
         <button onClick={()=>{setDraft("");setEditing(true);}} style={{background:"#111827",color:"#fff",border:"none",borderRadius:8,padding:"5px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Set target</button>
@@ -390,9 +390,9 @@ function TargetTracker({ confirmed, warm, target, onSetTarget, fyLabel }) {
   }
 
   return (
-    <div style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:"16px 20px",marginBottom:22}}>
+    <div className="target-tracker" style={{background:"#fff",border:"1.5px solid #e5e7eb",borderRadius:12,padding:"16px 20px",marginBottom:22}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",flexWrap:"wrap",gap:8,marginBottom:10}}>
-        <div style={{fontSize:13,fontWeight:700,color:"#111827",display:"flex",alignItems:"center",gap:6}}>
+        <div className="tt-title" style={{fontSize:13,fontWeight:700,color:"#111827",display:"flex",alignItems:"center",gap:6}}>
           <span>🎯 {fyLabel} Target:</span>
           {editing ? (
             <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
@@ -417,10 +417,10 @@ function TargetTracker({ confirmed, warm, target, onSetTarget, fyLabel }) {
           {" · "}
           {hit
             ? <b style={{color:"#15803d"}}>Target hit! 🎉</b>
-            : <><b style={{fontFamily:"'DM Mono',monospace",color:"#111827"}}>£{remaining.toLocaleString()}</b> to go</>}
+            : <><b className="tt-strong" style={{fontFamily:"'DM Mono',monospace",color:"#111827"}}>£{remaining.toLocaleString()}</b> to go</>}
         </div>
       </div>
-      <div style={{position:"relative",height:14,background:"#f3f4f6",borderRadius:999,overflow:"hidden"}}>
+      <div className="tt-bar" style={{position:"relative",height:14,background:"#f3f4f6",borderRadius:999,overflow:"hidden"}}>
         <div style={{position:"absolute",top:0,bottom:0,left:0,width:`${pct}%`,background:"linear-gradient(90deg,#0d3d2a,#16a34a)",borderRadius:999,transition:"width .5s ease"}}/>
         {pctWarm > 0 && <div style={{position:"absolute",top:0,bottom:0,left:`${pct}%`,width:`${pctWarm}%`,background:"#a78bfa",opacity:.45,transition:"width .5s ease, left .5s ease"}}/>}
       </div>
@@ -1954,6 +1954,10 @@ function EventTracker() {
   useEffect(()=>{ localStorage.setItem("connectin_dark", darkMode?"1":"0"); document.body.style.background = darkMode?"#0f172a":"#f7f8fa"; },[darkMode]);
   const saveTimer = useRef(null);
   const fileInputRef = useRef(null);
+  const undoTimer = useRef(null);
+  const [undo, setUndo] = useState(null); // {label, restore} — 10s window after Closed Lost / delete
+  const [detailId, setDetailId] = useState(null); // event id open in the detail panel
+  const [quickRange, setQuickRange] = useState("all"); // all | 7 | 30 — upcoming-days filter
 
   const currentFY = FINANCIAL_YEARS.find(f=>f.id===activeFY) || FINANCIAL_YEARS[0];
   const holidaysList = useMemo(()=>(holidays||[]).filter(h=>h.dates),[holidays]);
@@ -2221,12 +2225,20 @@ function EventTracker() {
         (filterAssignee==="All"||lead.assignee===filterAssignee)
       );
     });
+    if(quickRange!=="all"){
+      const today = new Date().toISOString().slice(0,10);
+      const end = new Date(Date.now() + Number(quickRange)*86400000).toISOString().slice(0,10);
+      l = l.filter(x=>{
+        const from = x.date||"", to = x.endDate||x.date||"";
+        return from && to >= today && from <= end; // any overlap with the window
+      });
+    }
     if(sortBy==="date")   l=[...l].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
     if(sortBy==="client") l=[...l].sort((a,b)=>(a.client||"").localeCompare(b.client||""));
     if(sortBy==="value")  l=[...l].sort((a,b)=>Number(b.value||0)-Number(a.value||0));
     if(sortBy==="ref")    l=[...l].sort((a,b)=>{ const an=Number(a.ref),bn=Number(b.ref); if(isNaN(an)&&isNaN(bn)) return String(a.ref||"").localeCompare(String(b.ref||"")); if(isNaN(an)) return 1; if(isNaN(bn)) return -1; return an-bn; });
     return l;
-  },[fyLeads,search,filterStage,filterAssignee,sortBy]);
+  },[fyLeads,search,filterStage,filterAssignee,sortBy,quickRange]);
 
   // Month collapsing — past months auto-collapse, user can override
   const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
@@ -2281,8 +2293,24 @@ function EventTracker() {
   const tbcCount     = fyLeads.filter(l=>l.venue?.trim().toUpperCase()==="TBC").length;
 
   function updateField(id,field,val) { setLeads(l=>l.map(x=>x.id===id?{...x,[field]:val}:x)); }
-  function updateStage(id,stage)     { setLeads(l=>l.map(x=>x.id===id?{...x,stage}:x)); }
-  function deleteLead(id)            { setLeads(l=>l.filter(x=>x.id!==id)); }
+  function pushUndo(label, restore) {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndo({ label, restore });
+    undoTimer.current = setTimeout(()=>setUndo(null), 10000);
+  }
+  function updateStage(id,stage) {
+    const prev = (leads||[]).find(x=>x.id===id);
+    if (prev && stage==="Closed Lost" && prev.stage!=="Closed Lost") {
+      const prevStage = prev.stage;
+      pushUndo(`"${prev.client||prev.event}" moved to Closed Lost`, ()=>setLeads(l=>l.map(x=>x.id===id?{...x,stage:prevStage}:x)));
+    }
+    setLeads(l=>l.map(x=>x.id===id?{...x,stage}:x));
+  }
+  function deleteLead(id) {
+    const prev = (leads||[]).find(x=>x.id===id);
+    if (prev) pushUndo(`Deleted "${prev.client||""} – ${prev.event||""}"`, ()=>setLeads(l=>[...l, prev]));
+    setLeads(l=>l.filter(x=>x.id!==id));
+  }
   function duplicateLead(lead)       { setLeads(l=>{ const maxId=l.reduce((mx,x)=>Math.max(mx,Number(x.id)||0),0); return [...l,{...lead,id:maxId+1,ref:""}]; }); }
   function openAdd()   {
     const maxRef = (leads||[]).reduce((mx,l)=>{ const n=parseInt(l.ref,10); return !isNaN(n)&&n>mx?n:mx; },0);
@@ -2465,7 +2493,7 @@ function EventTracker() {
   /* ── Table header ────────────────────────────────── */
   .th{padding:10px 10px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
   .th-lead{color:#a78bfa}
-  .thead-sticky{position:sticky;top:58px;z-index:5}
+  .thead-sticky th{position:sticky;top:58px;z-index:5;background:#fafafa}
 
   /* ── FY tabs ─────────────────────────────────────── */
   .fy-tab{padding:7px 16px;border-radius:8px;border:1.5px solid #e5e7eb;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;background:#fff;color:#6b7280;white-space:nowrap}
@@ -2501,10 +2529,21 @@ function EventTracker() {
   .leads-table-wrap::-webkit-scrollbar{height:6px}
   .leads-table-wrap::-webkit-scrollbar-track{background:#f1f5f9}
   .leads-table-wrap::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+  @media(min-width:1000px){.leads-table-wrap{overflow-x:visible}}
   .leads-cards{display:none}
   .controls-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
   .controls-search{flex:1;min-width:180px;position:relative}
   .controls-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+  /* ── Undo toast ──────────────────────────────────── */
+  .undo-toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;border-radius:999px;padding:9px 10px 9px 18px;display:flex;align-items:center;gap:12px;z-index:300;box-shadow:0 10px 32px rgba(0,0,0,.3);animation:toastUp .25s ease;max-width:92vw}
+  @keyframes toastUp{from{transform:translate(-50%,16px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+
+  /* ── Detail panel ────────────────────────────────── */
+  .panel-overlay{position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:120;display:flex;justify-content:flex-end;backdrop-filter:blur(1px)}
+  .detail-panel{background:#fff;width:440px;max-width:100%;height:100%;overflow-y:auto;padding:22px 24px;box-shadow:-12px 0 40px rgba(0,0,0,.18);animation:slideInRight .22s ease}
+  @keyframes slideInRight{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+  @media(max-width:768px){.detail-panel{width:100%}}
 
   /* ── Dark mode ───────────────────────────────────── */
   .dark-mode{background:#0f172a;color:#e2e8f0}
@@ -2527,6 +2566,19 @@ function EventTracker() {
   .dark-mode .fy-tab-active{background:#6366f1;border-color:#6366f1;color:#fff}
   .dark-mode .tab-btn{color:#94a3b8 !important}
   .dark-mode .section-divider{border-color:#334155;color:#475569}
+  .dark-mode .thead-sticky th{background:#1e293b}
+  .dark-mode .target-tracker{background:#1e293b !important;border-color:#334155 !important}
+  .dark-mode .tt-title{color:#e2e8f0 !important}
+  .dark-mode .tt-strong{color:#e2e8f0 !important}
+  .dark-mode .tt-bar{background:#0f172a !important}
+  .dark-mode .lead-card{background:#1e293b !important;border-color:#334155 !important}
+  .dark-mode .lc-title{color:#e2e8f0 !important}
+  .dark-mode .month-hdr{background:#243044 !important}
+  .dark-mode .month-hdr span{color:#cbd5e1 !important}
+  .dark-mode .detail-panel{background:#1e293b;color:#e2e8f0}
+  .dark-mode .dp-title{color:#e2e8f0 !important}
+  .dark-mode .view-switcher{background:#0f172a !important}
+  .dark-mode .view-switcher button{color:#64748b}
 
   /* ── Mobile ──────────────────────────────────────── */
   @media(max-width:768px){
@@ -2719,6 +2771,11 @@ function EventTracker() {
               <option value="ref">Sort: Ref</option>
             </select>
             <div className="view-switcher" style={{display:"flex",gap:3,background:"#f3f4f6",borderRadius:8,padding:3}}>
+              {[{id:"all",label:"All dates"},{id:"7",label:"Next 7d"},{id:"30",label:"Next 30d"}].map(v=>(
+                <button key={v.id} onClick={()=>setQuickRange(v.id)} style={{padding:"5px 12px",borderRadius:6,border:"none",background:quickRange===v.id?"#fff":"transparent",fontWeight:600,fontSize:12,color:quickRange===v.id?"#111827":"#9ca3af",cursor:"pointer",boxShadow:quickRange===v.id?"0 1px 4px rgba(0,0,0,.08)":"none",fontFamily:"inherit",transition:"all .15s"}}>{v.label}</button>
+              ))}
+            </div>
+            <div className="view-switcher" style={{display:"flex",gap:3,background:"#f3f4f6",borderRadius:8,padding:3}}>
               {[{id:"table",label:"Table"},{id:"kanban",label:"Kanban"},{id:"calendar",label:"📅 Cal"}].map(v=>(
                 <button key={v.id} onClick={()=>setView(v.id)} style={{padding:"5px 12px",borderRadius:6,border:"none",background:view===v.id?"#fff":"transparent",fontWeight:600,fontSize:12,color:view===v.id?"#111827":"#9ca3af",cursor:"pointer",boxShadow:view===v.id?"0 1px 4px rgba(0,0,0,.08)":"none",fontFamily:"inherit",transition:"all .15s"}}>{v.label}</button>
               ))}
@@ -2768,8 +2825,9 @@ function EventTracker() {
         {view==="table"&&(
           <div className="leads-table-wrap" style={{background:"#fff",borderRadius:12,border:"1.5px solid #e5e7eb"}}>
               <table style={{width:"100%",borderCollapse:"collapse",minWidth:950}}>
-                <thead>
+                <thead className="thead-sticky">
                   <tr style={{borderBottom:"1.5px solid #f3f4f6",background:"#fafafa"}}>
+                    <th className="th" style={{width:30}}></th>
                     <th className="th">Ref</th>
                     <th className="th" style={{background:"#fefce8",color:"#a16207"}}>Class</th>
                     <th className="th">Client</th>
@@ -2786,7 +2844,7 @@ function EventTracker() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length===0&&<tr><td colSpan={13}><div className="empty-state"><svg width="80" height="80" viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="38" fill="#f0f0ff" stroke="#e0e7ff" strokeWidth="2"/><rect x="22" y="28" width="36" height="28" rx="4" fill="#e0e7ff"/><rect x="28" y="36" width="24" height="3" rx="1.5" fill="#a5b4fc"/><rect x="28" y="43" width="16" height="3" rx="1.5" fill="#c7d2fe"/><circle cx="56" cy="26" r="8" fill="#6366f1"/><path d="M53 26h6M56 23v6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg><div style={{fontSize:15,fontWeight:700,color:"#4338ca"}}>No events match your filters</div><div style={{fontSize:13,color:"#9ca3af",maxWidth:260}}>Try changing the stage, owner filter, or search term to find what you're looking for.</div></div></td></tr>}
+                  {filtered.length===0&&<tr><td colSpan={14}><div className="empty-state"><svg width="80" height="80" viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="38" fill="#f0f0ff" stroke="#e0e7ff" strokeWidth="2"/><rect x="22" y="28" width="36" height="28" rx="4" fill="#e0e7ff"/><rect x="28" y="36" width="24" height="3" rx="1.5" fill="#a5b4fc"/><rect x="28" y="43" width="16" height="3" rx="1.5" fill="#c7d2fe"/><circle cx="56" cy="26" r="8" fill="#6366f1"/><path d="M53 26h6M56 23v6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg><div style={{fontSize:15,fontWeight:700,color:"#4338ca"}}>No events match your filters</div><div style={{fontSize:13,color:"#9ca3af",maxWidth:260}}>Try changing the stage, owner filter, or search term to find what you're looking for.</div></div></td></tr>}
                   {groupedByMonth.map(({key, leads:monthLeads})=>{
                     const mc = key!=="no-date" ? getMonthColor(key) : null;
                     const collapsed = isCollapsed(key);
@@ -2798,16 +2856,16 @@ function EventTracker() {
                     return [
                       // Month header row
                       <tr key={`hdr-${key}`} onClick={()=>handleMonthToggle(key)}
-                        style={{cursor:"pointer",background:mc?`${mc.bg}`:"#f9fafb",borderTop:"2px solid",borderTopColor:mc?mc.border:"#e5e7eb",userSelect:"none"}}
-                        className="row-hover">
-                        <td colSpan={13} style={{padding:"8px 14px"}}>
+                        style={{cursor:"pointer",background:darkMode?"#243044":(mc?mc.bg:"#f9fafb"),borderTop:"2px solid",borderTopColor:darkMode?"#334155":(mc?mc.border:"#e5e7eb"),userSelect:"none"}}
+                        className="row-hover month-hdr">
+                        <td colSpan={14} style={{padding:"8px 14px"}}>
                           <div style={{display:"flex",alignItems:"center",gap:10}}>
                             <span style={{fontSize:13,transition:"transform .2s",display:"inline-block",transform:collapsed?"rotate(-90deg)":"rotate(0deg)",color:mc?.bar||"#6b7280"}}>▾</span>
                             {mc&&<span style={{width:10,height:10,borderRadius:"50%",background:mc.bar,display:"inline-block",flexShrink:0}}/>}
-                            <span style={{fontWeight:700,fontSize:13,color:mc?.text||"#374151"}}>{label}</span>
+                            <span style={{fontWeight:700,fontSize:13,color:darkMode?"#cbd5e1":(mc?.text||"#374151")}}>{label}</span>
                             {past&&<span style={{fontSize:10,background:"#f3f4f6",color:"#9ca3af",borderRadius:999,padding:"1px 7px",fontWeight:600}}>Past</span>}
-                            <span style={{fontSize:12,color:mc?.text||"#6b7280",opacity:.6,marginLeft:4}}>{monthLeads.length} event{monthLeads.length!==1?"s":""}</span>
-                            {monthTotal>0&&<span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:mc?.text||"#374151",fontWeight:700,marginLeft:"auto",paddingRight:8}}>£{monthTotal.toLocaleString()}</span>}
+                            <span style={{fontSize:12,color:darkMode?"#94a3b8":(mc?.text||"#6b7280"),opacity:.6,marginLeft:4}}>{monthLeads.length} event{monthLeads.length!==1?"s":""}</span>
+                            {monthTotal>0&&<span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:darkMode?"#cbd5e1":(mc?.text||"#374151"),fontWeight:700,marginLeft:"auto",paddingRight:8}}>£{monthTotal.toLocaleString()}</span>}
                           </div>
                         </td>
                       </tr>,
@@ -2819,6 +2877,10 @@ function EventTracker() {
                     const fileCount=(lead.files||[]).length;
                     return (
                       <tr key={lead.id} className="row-hover" style={{borderBottom:"1px solid #f3f4f6"}}>
+                        <td style={{padding:"6px 4px 6px 10px"}}>
+                          <button title="Open details" onClick={()=>setDetailId(lead.id)}
+                            style={{background:"none",border:"1px solid #e5e7eb",borderRadius:6,width:24,height:24,cursor:"pointer",color:"#9ca3af",fontSize:13,lineHeight:1,fontFamily:"inherit"}}>›</button>
+                        </td>
                         <EditCell value={lead.ref}    onSave={v=>updateField(lead.id,"ref",v)}    placeholder="ref"/>
                         <EditCell value={lead.classCode||autoClass(lead)} onSave={v=>updateField(lead.id,"classCode",v)} placeholder="auto"/>
                         <td style={{padding:"10px 12px",fontWeight:600,fontSize:13,color:"#111827"}}>
@@ -2880,7 +2942,7 @@ function EventTracker() {
                         <td style={{padding:"6px 8px",whiteSpace:"nowrap"}}>
                           <button title="Duplicate" onClick={()=>duplicateLead(lead)}
                             style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:6,padding:"4px 8px",fontSize:12,cursor:"pointer",color:"#0369a1",fontWeight:600,fontFamily:"inherit",marginRight:4}}>⧉</button>
-                          <button title="Close Lost" onClick={()=>{ if(window.confirm(`Move "${lead.client} – ${lead.event}" to Closed Lost?`)) updateStage(lead.id,"Closed Lost"); }}
+                          <button title="Close Lost" onClick={()=>updateStage(lead.id,"Closed Lost")}
                             style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:6,padding:"4px 8px",fontSize:12,cursor:"pointer",color:"#dc2626",fontWeight:600,fontFamily:"inherit",marginRight:4}}>✗</button>
                           <button className="btn-danger" onClick={()=>{ if(window.confirm(`Delete "${lead.client} – ${lead.event}"?`)) deleteLead(lead.id); }}>✕</button>
                         </td>
@@ -2904,11 +2966,11 @@ function EventTracker() {
               const mc=lead.date?getMonthColor(monthKey(lead.date)):null;
               const fileCount=(lead.files||[]).length;
               return (
-                <div key={lead.id} style={{background:"#fff",borderRadius:10,border:"1.5px solid #e5e7eb",padding:"12px 14px"}}>
+                <div key={lead.id} className="lead-card" style={{background:"#fff",borderRadius:10,border:"1.5px solid #e5e7eb",padding:"12px 14px"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:4}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
+                    <div onClick={()=>setDetailId(lead.id)} style={{display:"flex",alignItems:"center",gap:6,minWidth:0,cursor:"pointer"}}>
                       {mc&&<span style={{width:8,height:8,borderRadius:"50%",background:mc.bar,display:"inline-block",flexShrink:0}}/>}
-                      <span style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.client}</span>
+                      <span className="lc-title" style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.client}</span>
                     </div>
                     <select value={lead.stage} onChange={e=>{if(e.target.value==="Confirmed")fireConfetti(e.target);updateStage(lead.id,e.target.value);}}
                       className="stage-pill"
@@ -2936,7 +2998,7 @@ function EventTracker() {
                         style={{background:"#f3f4f6",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,cursor:"pointer",color:"#374151",fontWeight:600,fontFamily:"inherit"}}>
                         Edit
                       </button>
-                      <button onClick={()=>{ if(window.confirm(`Move "${lead.client} – ${lead.event}" to Closed Lost?`)) updateStage(lead.id,"Closed Lost"); }}
+                      <button onClick={()=>updateStage(lead.id,"Closed Lost")}
                         style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:7,padding:"6px 10px",fontSize:12,cursor:"pointer",color:"#dc2626",fontWeight:600,fontFamily:"inherit"}}>✗ Lost</button>
                       <button className="btn-danger" onClick={()=>{ if(window.confirm(`Delete "${lead.client} – ${lead.event}"?`)) deleteLead(lead.id); }}>✕</button>
                     </div>
@@ -3198,6 +3260,88 @@ function EventTracker() {
               <button className="btn-ghost" onClick={()=>setShowOwners(false)}>Done</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Event Detail Panel */}
+      {(()=>{
+        const dl = detailId!=null ? (leads||[]).find(l=>l.id===detailId) : null;
+        if(!dl) return null;
+        const sc = STAGE_COLORS[dl.stage]||STAGE_COLORS["New Enquiry"];
+        const fld = (label, node) => (
+          <div style={{marginBottom:12}}>
+            <label className="form-label">{label}</label>
+            {node}
+          </div>
+        );
+        return (
+          <div className="panel-overlay" onClick={e=>e.target===e.currentTarget&&setDetailId(null)}>
+            <div className="detail-panel" key={dl.id}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                <select value={dl.stage} onChange={e=>{if(e.target.value==="Confirmed")fireConfetti(e.target);updateStage(dl.id,e.target.value);}}
+                  className="stage-pill" style={{background:sc.bg,color:sc.text,boxShadow:`inset 0 0 0 1.5px ${sc.dot}33`}}>
+                  {STAGES.map(s=><option key={s}>{s}</option>)}
+                </select>
+                <button onClick={()=>setDetailId(null)} style={{background:"none",border:"none",fontSize:24,cursor:"pointer",color:"#9ca3af",lineHeight:1}}>×</button>
+              </div>
+              <div className="dp-title" style={{fontSize:19,fontWeight:800,color:"#111827",letterSpacing:"-.02em",marginBottom:2}}>{dl.client||"—"}</div>
+              <div style={{fontSize:13,color:"#6b7280",marginBottom:18}}>{dl.event||"—"}</div>
+
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px"}}>
+                {fld("Client", <input className="form-input" defaultValue={dl.client||""} onBlur={e=>e.target.value!==(dl.client||"")&&updateField(dl.id,"client",e.target.value)}/>)}
+                {fld("Event", <input className="form-input" defaultValue={dl.event||""} onBlur={e=>e.target.value!==(dl.event||"")&&updateField(dl.id,"event",e.target.value)}/>)}
+                {fld("Ref", <input className="form-input" defaultValue={dl.ref||""} onBlur={e=>e.target.value!==(dl.ref||"")&&updateField(dl.id,"ref",e.target.value)}/>)}
+                {fld("Class code", <input className="form-input" defaultValue={dl.classCode||""} placeholder={autoClass(dl)} onBlur={e=>e.target.value!==(dl.classCode||"")&&updateField(dl.id,"classCode",e.target.value)}/>)}
+                {fld("Start date", <input type="date" className="form-input" value={dl.date||""} onChange={e=>updateField(dl.id,"date",e.target.value)}/>)}
+                {fld("End date", <input type="date" className="form-input" value={dl.endDate||""} onChange={e=>updateField(dl.id,"endDate",e.target.value)}/>)}
+                {fld("Venue", <input className="form-input" defaultValue={dl.venue||""} onBlur={e=>e.target.value!==(dl.venue||"")&&updateField(dl.id,"venue",e.target.value)}/>)}
+                {fld("Owner", (
+                  <select className="form-input" value={dl.assignee||""} onChange={e=>updateField(dl.id,"assignee",e.target.value)}>
+                    <option value="">—</option>
+                    {(owners||[]).map(o=><option key={o}>{o}</option>)}
+                  </select>
+                ))}
+                {fld("Value (£)", <input type="number" className="form-input" defaultValue={dl.value||""} onBlur={e=>e.target.value!==(dl.value||"")&&updateField(dl.id,"value",e.target.value)}/>)}
+                {fld("Recontact date", <input type="date" className="form-input" value={dl.recontactDate||""} onChange={e=>updateField(dl.id,"recontactDate",e.target.value)}/>)}
+              </div>
+
+              <div className="section-divider">Lead contact</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px"}}>
+                {fld("Name", <input className="form-input" defaultValue={dl.name||""} onBlur={e=>e.target.value!==(dl.name||"")&&updateField(dl.id,"name",e.target.value)}/>)}
+                {fld("Company", <input className="form-input" defaultValue={dl.company||""} onBlur={e=>e.target.value!==(dl.company||"")&&updateField(dl.id,"company",e.target.value)}/>)}
+              </div>
+              {fld("Email", <input type="email" className="form-input" defaultValue={dl.email||""} onBlur={e=>e.target.value!==(dl.email||"")&&updateField(dl.id,"email",e.target.value)}/>)}
+
+              <div className="section-divider">Notes</div>
+              <textarea className="form-input" rows={4} defaultValue={dl.notes||""} placeholder="Add notes…"
+                onBlur={e=>e.target.value!==(dl.notes||"")&&updateField(dl.id,"notes",e.target.value)} style={{resize:"vertical"}}/>
+
+              <div style={{display:"flex",gap:8,marginTop:18,flexWrap:"wrap"}}>
+                <button onClick={()=>setShowFiles(dl.id)}
+                  style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:8,padding:"8px 14px",fontSize:13,cursor:"pointer",color:"#1d4ed8",fontWeight:600,fontFamily:"inherit"}}>
+                  📎 Files{(dl.files||[]).length>0?` (${(dl.files||[]).length})`:""}
+                </button>
+                <button onClick={()=>{duplicateLead(dl);setDetailId(null);}}
+                  style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:8,padding:"8px 14px",fontSize:13,cursor:"pointer",color:"#0369a1",fontWeight:600,fontFamily:"inherit"}}>⧉ Duplicate</button>
+                <div style={{flex:1}}/>
+                <button onClick={()=>{updateStage(dl.id,"Closed Lost");setDetailId(null);}}
+                  style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"8px 14px",fontSize:13,cursor:"pointer",color:"#dc2626",fontWeight:600,fontFamily:"inherit"}}>✗ Lost</button>
+                <button onClick={()=>{ if(window.confirm(`Delete "${dl.client} – ${dl.event}"?`)){ deleteLead(dl.id); setDetailId(null); } }}
+                  style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"8px 14px",fontSize:13,cursor:"pointer",color:"#991b1b",fontWeight:700,fontFamily:"inherit"}}>Delete</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Undo toast */}
+      {undo&&(
+        <div className="undo-toast">
+          <span style={{fontSize:13}}>{undo.label}</span>
+          <button onClick={()=>{ if(undoTimer.current) clearTimeout(undoTimer.current); undo.restore(); setUndo(null); }}
+            style={{background:"#fff",color:"#111827",border:"none",borderRadius:999,padding:"5px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Undo</button>
+          <button onClick={()=>setUndo(null)}
+            style={{background:"none",color:"#9ca3af",border:"none",fontSize:16,cursor:"pointer",lineHeight:1,padding:2}}>✕</button>
         </div>
       )}
     </div>
