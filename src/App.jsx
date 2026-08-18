@@ -270,18 +270,22 @@ const BANK_HOLIDAYS = {
   "2028-12-26": "Boxing Day",
 };
 
-// Count Mon–Fri days in an inclusive range, skipping England bank holidays —
-// both are days off anyway so they don't come out of the allowance
+// Count Mon–Fri days in an inclusive range — weekends don't count as holiday.
+// Bank holidays inside the range DO count (they're days off in the total);
+// the yearly totals add uncovered bank holidays on top so each is counted once.
 function workingDays(start, end) {
   let count = 0;
   const cur = new Date(start);
   while (cur <= end) {
     const dow = cur.getDay();
-    if (dow !== 0 && dow !== 6 && !BANK_HOLIDAYS[isoDate(cur)]) count++;
+    if (dow !== 0 && dow !== 6) count++;
     cur.setDate(cur.getDate() + 1);
   }
   return count;
 }
+
+// People whose totals do NOT auto-include bank holidays
+const BH_EXEMPT = new Set(["Debbie"]);
 
 // Working days of a range that fall within one calendar year (allowances are annual)
 function workingDaysInYear(start, end, year) {
@@ -946,7 +950,7 @@ function HolidaysTab({ holidays, setHolidays, owners }) {
           <button className="btn-primary" onClick={addEntry} disabled={!newEntry.person||!newEntry.start}
             style={{opacity:(!newEntry.person||!newEntry.start)?.5:1}}>+ Add</button>
         </div>
-        <div style={{fontSize:11,color:"#9ca3af",marginTop:8}}>Leave "Last day" empty for a single day off. Day counts exclude weekends and England bank holidays.</div>
+        <div style={{fontSize:11,color:"#9ca3af",marginTop:8}}>Leave "Last day" empty for a single day off. Weekends never count. England bank holidays are added to everyone's yearly totals automatically (Debbie excluded for now), and days already booked over a bank holiday only count once.</div>
       </div>
 
       {/* Away now / soon strip */}
@@ -971,7 +975,7 @@ function HolidaysTab({ holidays, setHolidays, owners }) {
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
             <span style={{fontSize:14}}>🇬🇧</span>
             <div style={{fontWeight:700,fontSize:15,color:"#334155"}}>England Bank Holidays</div>
-            <div style={{marginLeft:"auto",fontSize:11,color:"#334155",opacity:.6,fontWeight:600}}>everyone off</div>
+            <div style={{marginLeft:"auto",fontSize:11,color:"#334155",opacity:.6,fontWeight:600}}>counted in totals</div>
           </div>
           {(()=>{
             const byYear = {};
@@ -1005,14 +1009,24 @@ function HolidaysTab({ holidays, setHolidays, owners }) {
           const entries = (holidays||[]).filter(h=>h.person===person).map(h=>({ h, m: entryMeta(h) }));
           const parseableE = entries.filter(x=>x.m.parseable).sort((a,b)=>a.m.startIso.localeCompare(b.m.startIso));
           const brokenE = entries.filter(x=>!x.m.parseable);
-          const years = [...new Set(parseableE.flatMap(x=>{
-            const a = Number(x.m.startIso.slice(0,4)), b = Number(x.m.endIso.slice(0,4));
-            const out = []; for (let y = a; y <= b; y++) out.push(y); return out;
-          }))].sort();
-          const yearTotal = y => parseableE.reduce((s,x)=>{
+          const exemptBH = BH_EXEMPT.has(person);
+          const years = [...new Set([
+            ...parseableE.flatMap(x=>{
+              const a = Number(x.m.startIso.slice(0,4)), b = Number(x.m.endIso.slice(0,4));
+              const out = []; for (let y = a; y <= b; y++) out.push(y); return out;
+            }),
+            ...(exemptBH ? [] : [new Date().getFullYear()]),
+          ])].sort();
+          const bookedInYear = y => parseableE.reduce((s,x)=>{
             const r = holRange(x.h);
             return s + workingDaysInYear(r.start, r.end, y);
           }, 0);
+          // Bank holidays for the year NOT already inside a booked period — counted once
+          const bankHolsInYear = y => Object.keys(BANK_HOLIDAYS).filter(iso=>{
+            if (Number(iso.slice(0,4)) !== y) return false;
+            return !parseableE.some(x=>x.m.startIso <= iso && x.m.endIso >= iso);
+          }).length;
+          const yearTotal = y => bookedInYear(y) + (exemptBH ? 0 : bankHolsInYear(y));
           const headerSummary = years.length > 0
             ? years.map(y=>`${y}: ${yearTotal(y)}d`).join(" · ")
             : `${entries.length} period${entries.length!==1?"s":""}`;
@@ -1070,12 +1084,16 @@ function HolidaysTab({ holidays, setHolidays, owners }) {
               return (<>
                 {years.map(y=>{
                   const yearRows = parseableE.filter(x=>x.m.startIso.slice(0,4)===String(y));
+                  const booked = bookedInYear(y);
+                  const bh = exemptBH ? 0 : bankHolsInYear(y);
                   const total = yearTotal(y);
                   return (
                     <div key={y}>
-                      <div style={{fontSize:11,fontWeight:800,color:pc.text,opacity:.65,margin:"10px 0 2px",textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"baseline",gap:6}}>
+                      <div style={{fontSize:11,fontWeight:800,color:pc.text,opacity:.65,margin:"10px 0 2px",textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"baseline",gap:6,flexWrap:"wrap"}}>
                         <span>{y}</span>
-                        <span style={{fontWeight:600,opacity:.8,textTransform:"none",letterSpacing:0}}>· {total} day{total!==1?"s":""} (excl. wknds & bank hols)</span>
+                        <span style={{fontWeight:600,opacity:.8,textTransform:"none",letterSpacing:0}}>
+                          · {total} day{total!==1?"s":""} {exemptBH ? "(bank hols not incl.)" : `(${booked} booked + ${bh} bank hols)`}
+                        </span>
                       </div>
                       {yearRows.map((x,i)=>renderRow(x,i))}
                     </div>
