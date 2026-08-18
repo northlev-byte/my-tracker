@@ -241,6 +241,26 @@ function isoDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
+// Count Mon–Fri days in an inclusive range — weekends are days off anyway
+function workingDays(start, end) {
+  let count = 0;
+  const cur = new Date(start);
+  while (cur <= end) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
+// Working days of a range that fall within one calendar year (allowances are annual)
+function workingDaysInYear(start, end, year) {
+  const s = start.getFullYear() < year ? new Date(year, 0, 1) : start;
+  const e = end.getFullYear() > year ? new Date(year, 11, 31) : end;
+  if (s > e) return 0;
+  return workingDays(s, e);
+}
+
 function getHolidayClashes(lead, holidays) {
   if (!lead.date || !lead.assignee) return [];
   // T00:00:00 forces local time — plain "YYYY-MM-DD" parses as UTC and misses
@@ -802,7 +822,7 @@ function HolidaysTab({ holidays, setHolidays, owners }) {
     const r = holRange(h);
     if (!r) return { parseable:false };
     const startIso = isoDate(r.start), endIso = isoDate(r.end);
-    const days = Math.round((r.end - r.start)/86400000) + 1;
+    const days = workingDays(r.start, r.end);
     return {
       parseable: true,
       label: fmtHolRange(startIso, endIso),
@@ -887,7 +907,7 @@ function HolidaysTab({ holidays, setHolidays, owners }) {
           <button className="btn-primary" onClick={addEntry} disabled={!newEntry.person||!newEntry.start}
             style={{opacity:(!newEntry.person||!newEntry.start)?.5:1}}>+ Add</button>
         </div>
-        <div style={{fontSize:11,color:"#9ca3af",marginTop:8}}>Leave "Last day" empty for a single day off.</div>
+        <div style={{fontSize:11,color:"#9ca3af",marginTop:8}}>Leave "Last day" empty for a single day off. Day counts exclude weekends.</div>
       </div>
 
       {/* Away now / soon strip */}
@@ -909,26 +929,31 @@ function HolidaysTab({ holidays, setHolidays, owners }) {
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:16}}>
         {people.map(person=>{
           const pc = PERSON_COLORS[person] || { bg:"#f9fafb",border:"#e5e7eb",text:"#374151",dot:"#6b7280" };
-          const personHols = (holidays||[]).filter(h=>h.person===person)
-            .map(h=>({ h, m: entryMeta(h) }))
-            .sort((a,b)=>{
-              if (!a.m.parseable) return 1;
-              if (!b.m.parseable) return -1;
-              if (a.m.isPast !== b.m.isPast) return a.m.isPast ? 1 : -1; // upcoming first
-              return a.m.startIso.localeCompare(b.m.startIso);
-            });
-          const upcomingDays = personHols.filter(x=>x.m.parseable&&!x.m.isPast).reduce((s,x)=>s+x.m.days,0);
+          const entries = (holidays||[]).filter(h=>h.person===person).map(h=>({ h, m: entryMeta(h) }));
+          const parseableE = entries.filter(x=>x.m.parseable).sort((a,b)=>a.m.startIso.localeCompare(b.m.startIso));
+          const brokenE = entries.filter(x=>!x.m.parseable);
+          const years = [...new Set(parseableE.flatMap(x=>{
+            const a = Number(x.m.startIso.slice(0,4)), b = Number(x.m.endIso.slice(0,4));
+            const out = []; for (let y = a; y <= b; y++) out.push(y); return out;
+          }))].sort();
+          const yearTotal = y => parseableE.reduce((s,x)=>{
+            const r = holRange(x.h);
+            return s + workingDaysInYear(r.start, r.end, y);
+          }, 0);
+          const headerSummary = years.length > 0
+            ? years.map(y=>`${y}: ${yearTotal(y)}d`).join(" · ")
+            : `${entries.length} period${entries.length!==1?"s":""}`;
           return (
             <div key={person} style={{background:pc.bg,border:`1.5px solid ${pc.border}`,borderRadius:12,padding:"16px 18px"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
                 <div style={{width:10,height:10,borderRadius:"50%",background:pc.dot,flexShrink:0}}/>
                 <div style={{fontWeight:700,fontSize:15,color:pc.text}}>{person}</div>
-                <div style={{marginLeft:"auto",fontSize:11,color:pc.text,opacity:.6,fontWeight:600}}>
-                  {upcomingDays>0?`${upcomingDays} day${upcomingDays!==1?"s":""} booked ahead`:`${personHols.length} period${personHols.length!==1?"s":""}`}
+                <div style={{marginLeft:"auto",fontSize:11,color:pc.text,opacity:.6,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>
+                  {headerSummary}
                 </div>
               </div>
-              {personHols.length===0&&<div style={{fontSize:13,color:pc.text,opacity:.4,paddingBottom:4}}>No holidays listed</div>}
-              {personHols.map(({h,m},i)=>(
+              {entries.length===0&&<div style={{fontSize:13,color:pc.text,opacity:.4,paddingBottom:4}}>No holidays listed</div>}
+              {(()=>{ const renderRow = ({h,m},i)=>(
                 <div key={h.id} style={{padding:"8px 0",borderTop:i>0?"1px solid rgba(0,0,0,.06)":"none",opacity:m.parseable&&m.isPast?.5:1}}>
                   {editingId===h.id ? (
                     <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -952,7 +977,7 @@ function HolidaysTab({ holidays, setHolidays, owners }) {
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:13,fontWeight:600,color:pc.text,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                           {m.parseable ? m.label : (h.dates||"—")}
-                          {m.parseable&&<span style={{fontSize:10,background:"rgba(0,0,0,.07)",borderRadius:999,padding:"1px 7px",fontWeight:700,opacity:.75}}>{m.days} day{m.days!==1?"s":""}</span>}
+                          {m.parseable&&<span style={{fontSize:10,background:"rgba(0,0,0,.07)",borderRadius:999,padding:"1px 7px",fontWeight:700,opacity:.75}}>{m.days===0?"weekend":`${m.days} day${m.days!==1?"s":""}`}</span>}
                           {m.isNow&&<span style={{fontSize:10,background:"#dc2626",color:"#fff",borderRadius:999,padding:"1px 7px",fontWeight:700}}>Away now</span>}
                           {m.parseable&&m.isPast&&<span style={{fontSize:10,background:"rgba(0,0,0,.08)",borderRadius:999,padding:"1px 7px",fontWeight:600,opacity:.7}}>Past</span>}
                         </div>
@@ -968,7 +993,28 @@ function HolidaysTab({ holidays, setHolidays, owners }) {
                     </div>
                   )}
                 </div>
-              ))}
+              );
+              return (<>
+                {years.map(y=>{
+                  const yearRows = parseableE.filter(x=>x.m.startIso.slice(0,4)===String(y));
+                  const total = yearTotal(y);
+                  return (
+                    <div key={y}>
+                      <div style={{fontSize:11,fontWeight:800,color:pc.text,opacity:.65,margin:"10px 0 2px",textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"baseline",gap:6}}>
+                        <span>{y}</span>
+                        <span style={{fontWeight:600,opacity:.8,textTransform:"none",letterSpacing:0}}>· {total} day{total!==1?"s":""} (excl. weekends)</span>
+                      </div>
+                      {yearRows.map((x,i)=>renderRow(x,i))}
+                    </div>
+                  );
+                })}
+                {brokenE.length>0&&(
+                  <div>
+                    <div style={{fontSize:11,fontWeight:800,color:"#dc2626",opacity:.8,margin:"10px 0 2px",textTransform:"uppercase",letterSpacing:".05em"}}>Needs fixing</div>
+                    {brokenE.map((x,i)=>renderRow(x,i))}
+                  </div>
+                )}
+              </>);})()}
             </div>
           );
         })}
