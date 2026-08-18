@@ -241,13 +241,43 @@ function isoDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-// Count Mon–Fri days in an inclusive range — weekends are days off anyway
+// England & Wales bank holidays (incl. substitute days where the holiday
+// falls on a weekend). Source: gov.uk. Extend annually.
+const BANK_HOLIDAYS = {
+  "2026-01-01": "New Year's Day",
+  "2026-04-03": "Good Friday",
+  "2026-04-06": "Easter Monday",
+  "2026-05-04": "Early May bank holiday",
+  "2026-05-25": "Spring bank holiday",
+  "2026-08-31": "Summer bank holiday",
+  "2026-12-25": "Christmas Day",
+  "2026-12-28": "Boxing Day (substitute)",
+  "2027-01-01": "New Year's Day",
+  "2027-03-26": "Good Friday",
+  "2027-03-29": "Easter Monday",
+  "2027-05-03": "Early May bank holiday",
+  "2027-05-31": "Spring bank holiday",
+  "2027-08-30": "Summer bank holiday",
+  "2027-12-27": "Christmas Day (substitute)",
+  "2027-12-28": "Boxing Day (substitute)",
+  "2028-01-03": "New Year's Day (substitute)",
+  "2028-04-14": "Good Friday",
+  "2028-04-17": "Easter Monday",
+  "2028-05-01": "Early May bank holiday",
+  "2028-05-29": "Spring bank holiday",
+  "2028-08-28": "Summer bank holiday",
+  "2028-12-25": "Christmas Day",
+  "2028-12-26": "Boxing Day",
+};
+
+// Count Mon–Fri days in an inclusive range, skipping England bank holidays —
+// both are days off anyway so they don't come out of the allowance
 function workingDays(start, end) {
   let count = 0;
   const cur = new Date(start);
   while (cur <= end) {
     const dow = cur.getDay();
-    if (dow !== 0 && dow !== 6) count++;
+    if (dow !== 0 && dow !== 6 && !BANK_HOLIDAYS[isoDate(cur)]) count++;
     cur.setDate(cur.getDate() + 1);
   }
   return count;
@@ -686,6 +716,15 @@ function CalendarView({ leads, onEventClick, holidays=[], recontacts=[] }) {
       cur.setDate(cur.getDate()+1);
     }
   });
+  // England bank holidays — shown for everyone
+  Object.entries(BANK_HOLIDAYS).forEach(([iso, name])=>{
+    const d = new Date(iso + "T00:00:00");
+    if (d.getFullYear()===calYear && d.getMonth()===calMonth) {
+      const key = d.getDate();
+      if (!holidaysByDate[key]) holidaysByDate[key] = [];
+      holidaysByDate[key].unshift({ person:"🇬🇧 Bank Holiday", dates:name, color:"#dc2626" });
+    }
+  });
 
   const todayStr = today.toDateString();
 
@@ -907,7 +946,7 @@ function HolidaysTab({ holidays, setHolidays, owners }) {
           <button className="btn-primary" onClick={addEntry} disabled={!newEntry.person||!newEntry.start}
             style={{opacity:(!newEntry.person||!newEntry.start)?.5:1}}>+ Add</button>
         </div>
-        <div style={{fontSize:11,color:"#9ca3af",marginTop:8}}>Leave "Last day" empty for a single day off. Day counts exclude weekends.</div>
+        <div style={{fontSize:11,color:"#9ca3af",marginTop:8}}>Leave "Last day" empty for a single day off. Day counts exclude weekends and England bank holidays.</div>
       </div>
 
       {/* Away now / soon strip */}
@@ -927,6 +966,40 @@ function HolidaysTab({ holidays, setHolidays, owners }) {
       )}
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:16}}>
+        {/* England bank holidays card */}
+        <div style={{background:"#f8fafc",border:"1.5px solid #cbd5e1",borderRadius:12,padding:"16px 18px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+            <span style={{fontSize:14}}>🇬🇧</span>
+            <div style={{fontWeight:700,fontSize:15,color:"#334155"}}>England Bank Holidays</div>
+            <div style={{marginLeft:"auto",fontSize:11,color:"#334155",opacity:.6,fontWeight:600}}>everyone off</div>
+          </div>
+          {(()=>{
+            const byYear = {};
+            Object.entries(BANK_HOLIDAYS).forEach(([iso,name])=>{
+              const y = iso.slice(0,4);
+              if (!byYear[y]) byYear[y] = [];
+              byYear[y].push({ iso, name });
+            });
+            return Object.keys(byYear).sort().map(y=>(
+              <div key={y}>
+                <div style={{fontSize:11,fontWeight:800,color:"#334155",opacity:.65,margin:"10px 0 2px",letterSpacing:".05em"}}>{y}</div>
+                {byYear[y].map(({iso,name},i)=>{
+                  const d = new Date(iso+"T00:00:00");
+                  const isPast = iso < todayIso;
+                  return (
+                    <div key={iso} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderTop:i>0?"1px solid rgba(0,0,0,.05)":"none",opacity:isPast?.45:1}}>
+                      <span style={{fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:700,color:"#334155",width:86,flexShrink:0}}>
+                        {d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})}
+                      </span>
+                      <span style={{fontSize:12,color:"#475569"}}>{name}</span>
+                      {iso===todayIso&&<span style={{fontSize:10,background:"#dc2626",color:"#fff",borderRadius:999,padding:"1px 7px",fontWeight:700,marginLeft:"auto"}}>Today</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            ));
+          })()}
+        </div>
         {people.map(person=>{
           const pc = PERSON_COLORS[person] || { bg:"#f9fafb",border:"#e5e7eb",text:"#374151",dot:"#6b7280" };
           const entries = (holidays||[]).filter(h=>h.person===person).map(h=>({ h, m: entryMeta(h) }));
@@ -1002,7 +1075,7 @@ function HolidaysTab({ holidays, setHolidays, owners }) {
                     <div key={y}>
                       <div style={{fontSize:11,fontWeight:800,color:pc.text,opacity:.65,margin:"10px 0 2px",textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"baseline",gap:6}}>
                         <span>{y}</span>
-                        <span style={{fontWeight:600,opacity:.8,textTransform:"none",letterSpacing:0}}>· {total} day{total!==1?"s":""} (excl. weekends)</span>
+                        <span style={{fontWeight:600,opacity:.8,textTransform:"none",letterSpacing:0}}>· {total} day{total!==1?"s":""} (excl. wknds & bank hols)</span>
                       </div>
                       {yearRows.map((x,i)=>renderRow(x,i))}
                     </div>
