@@ -175,56 +175,92 @@ function monthKey(dateStr) { return dateStr ? dateStr.substring(0,7) : null; }
 
 
 // Parse a holiday date string like "29 Apr – 7 May 2026" or "9 Mar 2026" into {start, end} Date objects
+const MONTHS_MAP = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+function monthNum(word) {
+  if (!word) return null;
+  const m = MONTHS_MAP[word.toLowerCase().slice(0,3)];
+  return m === undefined ? null : m;
+}
+
+// Tolerant parser for legacy free-text holiday dates. Handles ordinals ("14th"),
+// weekday prefixes ("Monday 29th June"), missing years, "&"/"to" separators,
+// and month names in any case. Returns null when genuinely un-understandable.
 function parseHolidayRange(dateStr) {
   if (!dateStr) return null;
   try {
-    // Single date: "9 Mar 2026"
-    const single = dateStr.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
-    if (single) {
-      const d = new Date(`${single[2]} ${single[1]} ${single[3]}`);
-      return isNaN(d) ? null : { start: d, end: d };
-    }
-    // Range across months: "29 Apr – 7 May 2026"
-    const range = dateStr.match(/^(\d{1,2})\s+([A-Za-z]+)\s*[–-]\s*(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
-    if (range) {
-      const start = new Date(`${range[2]} ${range[1]} ${range[5]}`);
-      const end   = new Date(`${range[4]} ${range[3]} ${range[5]}`);
-      return (isNaN(start)||isNaN(end)) ? null : { start, end };
-    }
-    // Range same month: "17 – 21 Feb 2026"
-    const sameMonth = dateStr.match(/^(\d{1,2})\s*[–-]\s*(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
-    if (sameMonth) {
-      const start = new Date(`${sameMonth[3]} ${sameMonth[1]} ${sameMonth[4]}`);
-      const end   = new Date(`${sameMonth[3]} ${sameMonth[2]} ${sameMonth[4]}`);
-      return (isNaN(start)||isNaN(end)) ? null : { start, end };
-    }
-    // Multi-date "27 Feb & 2 Mar 2026" — treat as separate single dates, return first
-    const multi = dateStr.match(/^(\d{1,2})\s+([A-Za-z]+)\s*&\s*(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
-    if (multi) {
-      const d1 = new Date(`${multi[2]} ${multi[1]} ${multi[5]}`);
-      const d2 = new Date(`${multi[4]} ${multi[3]} ${multi[5]}`);
-      return isNaN(d1) ? null : { start: d1, end: isNaN(d2)?d1:d2 };
-    }
-  } catch {}
-  return null;
+    let s = String(dateStr).toLowerCase();
+    s = s.replace(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat|sun)\b/g, " ");
+    s = s.replace(/(\d+)(st|nd|rd|th)\b/g, "$1");
+    s = s.replace(/\bto\b/g, "-").replace(/&/g, "-").replace(/[–—]/g, "-");
+    s = s.replace(/[.,]/g, " ").replace(/\s+/g, " ").trim();
+    const m = s.match(/^(\d{1,2})(?:\s+([a-z]+))?(?:\s+(\d{4}))?(?:\s*-\s*(\d{1,2})(?:\s+([a-z]+))?(?:\s+(\d{4}))?)?$/);
+    if (!m) return null;
+    const d1 = Number(m[1]), mo1 = monthNum(m[2]), y1 = m[3] ? Number(m[3]) : null;
+    const d2 = m[4] ? Number(m[4]) : null, mo2 = monthNum(m[5]), y2 = m[6] ? Number(m[6]) : null;
+    // A month word that exists but isn't recognisable (e.g. a typo) → refuse rather than guess
+    if (m[2] && mo1 === null) return null;
+    if (m[5] && mo2 === null) return null;
+    const M1 = mo1 !== null ? mo1 : mo2;
+    const M2 = mo2 !== null ? mo2 : mo1;
+    if (M1 === null) return null;
+    const Y1 = y1 ?? y2 ?? new Date().getFullYear();
+    const start = new Date(Y1, M1, d1);
+    if (d2 === null) return isNaN(start) ? null : { start, end: start };
+    let Y2 = y2 ?? Y1;
+    if (M2 < M1 && Y2 === Y1 && !y2) Y2 = Y1 + 1; // "30 Dec - 2 Jan"
+    const end = new Date(Y2, M2, d2);
+    if (isNaN(start) || isNaN(end) || end < start) return null;
+    return { start, end };
+  } catch { return null; }
+}
+
+// Resolve a holiday entry to a date range — structured fields first, text fallback
+function holRange(h) {
+  if (h.start) {
+    const s = new Date(h.start + "T00:00:00");
+    const e = new Date((h.end || h.start) + "T00:00:00");
+    if (!isNaN(s) && !isNaN(e)) return { start: s, end: e };
+  }
+  return parseHolidayRange(h.dates);
+}
+
+function fmtHolRange(startIso, endIso) {
+  const s = new Date(startIso + "T00:00:00");
+  if (isNaN(s)) return "";
+  const e = endIso ? new Date(endIso + "T00:00:00") : s;
+  const full = { day: "numeric", month: "short", year: "numeric" };
+  if (isNaN(e) || s.getTime() === e.getTime()) return s.toLocaleDateString("en-GB", full);
+  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear())
+    return `${s.getDate()} – ${e.toLocaleDateString("en-GB", full)}`;
+  if (s.getFullYear() === e.getFullYear())
+    return `${s.getDate()} ${s.toLocaleDateString("en-GB",{month:"short"})} – ${e.toLocaleDateString("en-GB", full)}`;
+  return `${s.toLocaleDateString("en-GB", full)} – ${e.toLocaleDateString("en-GB", full)}`;
+}
+
+function isoDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
 function getHolidayClashes(lead, holidays) {
   if (!lead.date || !lead.assignee) return [];
-  const eventDate = new Date(lead.date);
-  if (isNaN(eventDate)) return [];
+  // T00:00:00 forces local time — plain "YYYY-MM-DD" parses as UTC and misses
+  // same-day clashes during BST
+  const evStart = new Date(lead.date + "T00:00:00");
+  if (isNaN(evStart)) return [];
+  const evEndRaw = new Date((lead.endDate || lead.date) + "T00:00:00");
+  const evEnd = isNaN(evEndRaw) ? evStart : evEndRaw;
   // Extract individual names from assignee (handles "David / Jordan", "Jordan/PP" etc)
   const names = lead.assignee.split(/[/,&]/).map(n=>n.trim()).filter(Boolean);
   const clashes = [];
   holidays.forEach(h => {
-    if (!h.dates || !h.person) return;
+    if (!h.person) return;
     const personMatch = names.some(n => n.toLowerCase() === h.person.toLowerCase());
     if (!personMatch) return;
-    const range = parseHolidayRange(h.dates);
+    const range = holRange(h);
     if (!range) return;
-    const eTime = eventDate.getTime();
-    if (eTime >= range.start.getTime() && eTime <= range.end.getTime()) {
-      clashes.push({ person: h.person, dates: h.dates });
+    // any overlap between the event's full run and the holiday
+    if (evStart.getTime() <= range.end.getTime() && evEnd.getTime() >= range.start.getTime()) {
+      clashes.push({ person: h.person, dates: h.dates || fmtHolRange(h.start, h.end) });
     }
   });
   return clashes;
@@ -612,8 +648,8 @@ function CalendarView({ leads, onEventClick, holidays=[], recontacts=[] }) {
   // Map holidays to day ranges for this month
   const holidaysByDate = {}; // key=dayNum, value=[{person,dates,color}]
   holidays.forEach(h => {
-    if (!h.dates || !h.person) return;
-    const range = parseHolidayRange(h.dates);
+    if (!h.person) return;
+    const range = holRange(h);
     if (!range) return;
     const pc = PERSON_COLORS[h.person] || { dot:"#6b7280" };
     // iterate each day in range that falls in current month/year
@@ -752,33 +788,80 @@ function CalendarView({ leads, onEventClick, holidays=[], recontacts=[] }) {
 
 // ── Holidays Tab ───────────────────────────────────────────
 function HolidaysTab({ holidays, setHolidays, owners }) {
-  const [newEntry, setNewEntry] = useState({ person:"", dates:"", note:"" });
+  const [newEntry, setNewEntry] = useState({ person:"", start:"", end:"", note:"" });
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState({});
 
   const individualOwners = (owners || DEFAULT_OWNERS).filter(o => !/[/&]/.test(o));
   const people = [...new Set([...individualOwners, ...(holidays||[]).map(h=>h.person)])].filter(Boolean);
 
+  const todayIso = isoDate(new Date());
+  const soonIso = isoDate(new Date(Date.now() + 14*86400000));
+
+  function entryMeta(h) {
+    const r = holRange(h);
+    if (!r) return { parseable:false };
+    const startIso = isoDate(r.start), endIso = isoDate(r.end);
+    const days = Math.round((r.end - r.start)/86400000) + 1;
+    return {
+      parseable: true,
+      label: fmtHolRange(startIso, endIso),
+      days,
+      isPast: endIso < todayIso,
+      isNow: startIso <= todayIso && endIso >= todayIso,
+      isSoon: startIso > todayIso && startIso <= soonIso,
+      startIso, endIso,
+    };
+  }
+
   function addEntry() {
-    if (!newEntry.person || !newEntry.dates) return;
-    setHolidays(h=>[...(h||[]), {...newEntry, id:`custom-${Date.now()}`}]);
-    setNewEntry({ person:"", dates:"", note:"" });
+    if (!newEntry.person || !newEntry.start) return;
+    const end = newEntry.end && newEntry.end >= newEntry.start ? newEntry.end : newEntry.start;
+    setHolidays(h=>[...(h||[]), {
+      id:`custom-${Date.now()}`,
+      person: newEntry.person,
+      start: newEntry.start,
+      end,
+      dates: fmtHolRange(newEntry.start, end),
+      note: newEntry.note,
+    }]);
+    setNewEntry({ person:"", start:"", end:"", note:"" });
   }
   function deleteEntry(id) { setHolidays(h=>(h||[]).filter(x=>x.id!==id)); }
-  function startEdit(h) { setEditingId(h.id); setEditDraft({dates:h.dates,note:h.note||""}); }
+  function startEdit(h) {
+    const r = holRange(h);
+    setEditingId(h.id);
+    setEditDraft({
+      start: h.start || (r ? isoDate(r.start) : ""),
+      end:   h.end   || (r ? isoDate(r.end)   : ""),
+      note:  h.note || "",
+    });
+  }
   function saveEdit(id) {
-    setHolidays(h=>(h||[]).map(x=>x.id===id?{...x,...editDraft}:x));
+    if (!editDraft.start) return;
+    const end = editDraft.end && editDraft.end >= editDraft.start ? editDraft.end : editDraft.start;
+    setHolidays(h=>(h||[]).map(x=>x.id===id
+      ? { ...x, start: editDraft.start, end, dates: fmtHolRange(editDraft.start, end), note: editDraft.note }
+      : x));
     setEditingId(null);
   }
+
+  // Who's away now or in the next 14 days — quick strip at the top
+  const awaySoon = (holidays||[])
+    .map(h=>({ h, m: entryMeta(h) }))
+    .filter(x=>x.m.parseable && (x.m.isNow || x.m.isSoon))
+    .sort((a,b)=>a.m.startIso.localeCompare(b.m.startIso));
+
+  const lbl = { fontSize:11, fontWeight:700, color:"#6b7280", textTransform:"uppercase", letterSpacing:".07em", marginBottom:4 };
 
   return (
     <div>
       {/* Add form */}
-      <div style={{background:"#fff",borderRadius:10,border:"1.5px solid #e5e7eb",padding:"16px 20px",marginBottom:20}}>
+      <div style={{background:"#fff",borderRadius:10,border:"1.5px solid #e5e7eb",padding:"16px 20px",marginBottom:16}} className="lead-card">
         <div style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:12}}>➕ Add Holiday Period</div>
         <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end"}}>
           <div>
-            <div style={{fontSize:11,fontWeight:700,color:"#6b7280",textTransform:"uppercase",letterSpacing:".07em",marginBottom:4}}>Person</div>
+            <div style={lbl}>Person</div>
             <select value={newEntry.person} onChange={e=>setNewEntry(n=>({...n,person:e.target.value}))}
               className="form-input" style={{width:130}}>
               <option value="">— select —</option>
@@ -786,50 +869,94 @@ function HolidaysTab({ holidays, setHolidays, owners }) {
             </select>
           </div>
           <div>
-            <div style={{fontSize:11,fontWeight:700,color:"#6b7280",textTransform:"uppercase",letterSpacing:".07em",marginBottom:4}}>Dates</div>
-            <input value={newEntry.dates} onChange={e=>setNewEntry(n=>({...n,dates:e.target.value}))}
-              placeholder="e.g. 1–5 Jun 2027" className="form-input" style={{width:200}}/>
+            <div style={lbl}>First day</div>
+            <input type="date" value={newEntry.start} onChange={e=>setNewEntry(n=>({...n,start:e.target.value}))}
+              className="form-input" style={{width:160}}/>
           </div>
           <div>
-            <div style={{fontSize:11,fontWeight:700,color:"#6b7280",textTransform:"uppercase",letterSpacing:".07em",marginBottom:4}}>Note (optional)</div>
+            <div style={lbl}>Last day</div>
+            <input type="date" value={newEntry.end} min={newEntry.start||undefined} onChange={e=>setNewEntry(n=>({...n,end:e.target.value}))}
+              className="form-input" style={{width:160}}/>
+          </div>
+          <div>
+            <div style={lbl}>Note (optional)</div>
             <input value={newEntry.note} onChange={e=>setNewEntry(n=>({...n,note:e.target.value}))}
               onKeyDown={e=>e.key==="Enter"&&addEntry()}
               placeholder="e.g. Annual leave" className="form-input" style={{width:160}}/>
           </div>
-          <button className="btn-primary" onClick={addEntry}>+ Add</button>
+          <button className="btn-primary" onClick={addEntry} disabled={!newEntry.person||!newEntry.start}
+            style={{opacity:(!newEntry.person||!newEntry.start)?.5:1}}>+ Add</button>
         </div>
+        <div style={{fontSize:11,color:"#9ca3af",marginTop:8}}>Leave "Last day" empty for a single day off.</div>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:16}}>
+      {/* Away now / soon strip */}
+      {awaySoon.length>0&&(
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:20}}>
+          <span style={{fontSize:11,fontWeight:700,color:"#9ca3af",textTransform:"uppercase",letterSpacing:".07em"}}>Away now / next 14 days:</span>
+          {awaySoon.map(({h,m})=>{
+            const pc = PERSON_COLORS[h.person] || { dot:"#6b7280" };
+            return (
+              <span key={h.id} style={{display:"inline-flex",alignItems:"center",gap:6,background:m.isNow?"#fef2f2":"#fff",border:`1.5px solid ${m.isNow?"#fecaca":"#e5e7eb"}`,borderRadius:999,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#374151"}}>
+                <span style={{width:8,height:8,borderRadius:"50%",background:pc.dot,display:"inline-block"}}/>
+                {h.person}{m.isNow?" · away now":""} · {m.label}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:16}}>
         {people.map(person=>{
           const pc = PERSON_COLORS[person] || { bg:"#f9fafb",border:"#e5e7eb",text:"#374151",dot:"#6b7280" };
-          const personHols = (holidays||[]).filter(h=>h.person===person);
+          const personHols = (holidays||[]).filter(h=>h.person===person)
+            .map(h=>({ h, m: entryMeta(h) }))
+            .sort((a,b)=>{
+              if (!a.m.parseable) return 1;
+              if (!b.m.parseable) return -1;
+              if (a.m.isPast !== b.m.isPast) return a.m.isPast ? 1 : -1; // upcoming first
+              return a.m.startIso.localeCompare(b.m.startIso);
+            });
+          const upcomingDays = personHols.filter(x=>x.m.parseable&&!x.m.isPast).reduce((s,x)=>s+x.m.days,0);
           return (
             <div key={person} style={{background:pc.bg,border:`1.5px solid ${pc.border}`,borderRadius:12,padding:"16px 18px"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
                 <div style={{width:10,height:10,borderRadius:"50%",background:pc.dot,flexShrink:0}}/>
                 <div style={{fontWeight:700,fontSize:15,color:pc.text}}>{person}</div>
-                <div style={{marginLeft:"auto",fontSize:11,color:pc.text,opacity:.6,fontWeight:600}}>{personHols.length} period{personHols.length!==1?"s":""}</div>
+                <div style={{marginLeft:"auto",fontSize:11,color:pc.text,opacity:.6,fontWeight:600}}>
+                  {upcomingDays>0?`${upcomingDays} day${upcomingDays!==1?"s":""} booked ahead`:`${personHols.length} period${personHols.length!==1?"s":""}`}
+                </div>
               </div>
               {personHols.length===0&&<div style={{fontSize:13,color:pc.text,opacity:.4,paddingBottom:4}}>No holidays listed</div>}
-              {personHols.map((h,i)=>(
-                <div key={h.id} style={{padding:"8px 0",borderTop:i>0?"1px solid rgba(0,0,0,.06)":"none"}}>
+              {personHols.map(({h,m},i)=>(
+                <div key={h.id} style={{padding:"8px 0",borderTop:i>0?"1px solid rgba(0,0,0,.06)":"none",opacity:m.parseable&&m.isPast?.5:1}}>
                   {editingId===h.id ? (
                     <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                      <input value={editDraft.dates} onChange={e=>setEditDraft(d=>({...d,dates:e.target.value}))}
-                        className="form-input" style={{fontSize:13,padding:"5px 8px"}} placeholder="Dates"/>
+                      <div style={{display:"flex",gap:6}}>
+                        <input type="date" value={editDraft.start} onChange={e=>setEditDraft(d=>({...d,start:e.target.value}))}
+                          className="form-input" style={{fontSize:12,padding:"5px 8px",flex:1}}/>
+                        <input type="date" value={editDraft.end} min={editDraft.start||undefined} onChange={e=>setEditDraft(d=>({...d,end:e.target.value}))}
+                          className="form-input" style={{fontSize:12,padding:"5px 8px",flex:1}}/>
+                      </div>
                       <input value={editDraft.note} onChange={e=>setEditDraft(d=>({...d,note:e.target.value}))}
                         className="form-input" style={{fontSize:12,padding:"5px 8px"}} placeholder="Note (optional)"/>
                       <div style={{display:"flex",gap:6,marginTop:2}}>
-                        <button onClick={()=>saveEdit(h.id)} style={{background:pc.dot,color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Save</button>
+                        <button onClick={()=>saveEdit(h.id)} disabled={!editDraft.start}
+                          style={{background:pc.dot,color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",opacity:editDraft.start?1:.5}}>Save</button>
                         <button onClick={()=>setEditingId(null)} style={{background:"#f3f4f6",color:"#374151",border:"none",borderRadius:6,padding:"4px 10px",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
                       </div>
                     </div>
                   ) : (
                     <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
-                      <span style={{fontSize:13,marginTop:1,flexShrink:0}}>🏖️</span>
+                      <span style={{fontSize:13,marginTop:1,flexShrink:0}}>{m.parseable?"🏖️":"⚠️"}</span>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:500,color:pc.text}}>{h.dates||"—"}</div>
+                        <div style={{fontSize:13,fontWeight:600,color:pc.text,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                          {m.parseable ? m.label : (h.dates||"—")}
+                          {m.parseable&&<span style={{fontSize:10,background:"rgba(0,0,0,.07)",borderRadius:999,padding:"1px 7px",fontWeight:700,opacity:.75}}>{m.days} day{m.days!==1?"s":""}</span>}
+                          {m.isNow&&<span style={{fontSize:10,background:"#dc2626",color:"#fff",borderRadius:999,padding:"1px 7px",fontWeight:700}}>Away now</span>}
+                          {m.parseable&&m.isPast&&<span style={{fontSize:10,background:"rgba(0,0,0,.08)",borderRadius:999,padding:"1px 7px",fontWeight:600,opacity:.7}}>Past</span>}
+                        </div>
+                        {!m.parseable&&<div style={{fontSize:11,color:"#dc2626",marginTop:1,fontWeight:600}}>Dates not understood — click ✏️ and pick them with the date picker</div>}
                         {h.note&&<div style={{fontSize:11,color:pc.text,opacity:.6,marginTop:1}}>{h.note}</div>}
                       </div>
                       <div style={{display:"flex",gap:4,flexShrink:0}}>
@@ -1960,7 +2087,7 @@ function EventTracker() {
   const [quickRange, setQuickRange] = useState("all"); // all | 7 | 30 — upcoming-days filter
 
   const currentFY = FINANCIAL_YEARS.find(f=>f.id===activeFY) || FINANCIAL_YEARS[0];
-  const holidaysList = useMemo(()=>(holidays||[]).filter(h=>h.dates),[holidays]);
+  const holidaysList = useMemo(()=>(holidays||[]).filter(h=>h.dates||h.start),[holidays]);
 
   // Track whether initial load is complete — prevents save firing before load finishes
   const loadedRef = useRef(false);
@@ -2105,6 +2232,22 @@ function EventTracker() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   },[]);
+
+  // One-shot repair: convert legacy free-text holiday dates to structured start/end.
+  // Idempotent — entries that gain start/end are skipped on the next pass, and
+  // un-parseable ones are left for the user to fix (flagged in the Holidays tab).
+  useEffect(()=>{
+    if(holidays===null) return;
+    let changed = false;
+    const next = holidays.map(h=>{
+      if (h.start || !h.dates) return h;
+      const r = parseHolidayRange(h.dates);
+      if (!r) return h;
+      changed = true;
+      return { ...h, start: isoDate(r.start), end: isoDate(r.end) };
+    });
+    if (changed) setHolidays(next);
+  },[holidays]);
 
   // Mirror leads, owners & prospects to localStorage on every change
   useEffect(()=>{
